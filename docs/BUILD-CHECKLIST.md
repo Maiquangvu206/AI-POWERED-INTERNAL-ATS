@@ -63,58 +63,77 @@
 
 ### 1.1. Docker Compose
 
-- [ ] `infra/docker-compose.yml` gồm: `postgres:16`, `redis:7`, `minio`, `mailhog`
-- [ ] Volume bền vững cho Postgres và MinIO
-- [ ] Healthcheck cho cả 4 service
-- [ ] `docker compose up -d` chạy sạch, không warning
-- [ ] Script `infra/init-minio.sh` tạo bucket `cv-files` (private) + bucket `avatars`
-- [ ] `.env` map đúng cổng: Postgres 5432, Redis 6379, MinIO 9000/9001, MailHog 1025/8025
+- [x] `infra/docker-compose.yml` gồm: `postgres:16`, `redis:7`, **`rustfs`** (thay MinIO), **`mailpit`** (thay MailHog), `storage-init`
+- [x] Volume bền vững cho Postgres, Redis, RustFS (`down` không mất dữ liệu)
+- [x] Healthcheck cho Postgres / Redis / Mailpit
+- [x] `docker compose up -d` chạy sạch (qua `npm run infra:up`)
+- [x] `storage-init` (amazon/aws-cli) tạo bucket `cv-files` **private** rồi thoát
+- [x] `.env` map đúng cổng thực tế: Postgres **5433**, Redis 6379, RustFS 9000/9001, Mailpit 1025/8025
 
-**Verify:** `docker compose ps` → tất cả `healthy`; mở `http://localhost:9001` đăng nhập MinIO được; `http://localhost:8025` thấy MailHog.
+**Verify:** `docker compose ps` → 4 service `healthy`/`running`; Console `http://localhost:9001`; mail `http://localhost:8025`; `redis-cli ping` → `PONG`.
 
 ### 1.2. Database Schema
 
-- [ ] `prisma/schema.prisma` mô tả đủ 7 bảng: `users`, `campaigns`, `rounds`, `criteria`, `candidates`, `evaluations`, `evaluation_details`
-- [ ] Thêm bảng thứ 8: `audit_logs` (ADR-07)
-- [ ] Enum đúng SRS: `Role`, `UserStatus`, `CampaignStatus`, `RoundStatus`, `FinalStatus`
-- [ ] `candidates.ai_parsed_skills` dùng `Json` (jsonb)
-- [ ] `candidates.ai_match_score` **nullable** + có `ai_processed_at`, `ai_error` (chịu lỗi AI)
-- [ ] UNIQUE `(round_id, candidate_id, interviewer_id)` trên `evaluations`
-- [ ] UNIQUE index `candidates.tracking_code`
-- [ ] Index `(campaign_id, ai_match_score DESC NULLS LAST)`
-- [ ] CHECK `criteria.weight` trong `[0,1]`
-- [ ] Migration đầu tiên chạy thành công: `prisma migrate dev --name init`
-- [ ] Bật `prisma studio` kiểm tra bảng
-
-**Verify:** `psql` → `\d evaluations` thấy constraint UNIQUE; `EXPLAIN ANALYZE` query xếp hạng dùng index.
+- [x] `prisma/schema.prisma` mô tả đủ 7 bảng: `users`, `campaigns`, `rounds`, `criteria`, `candidates`, `evaluations`, `evaluation_details`
+- [x] Thêm bảng thứ 8: `audit_logs` (ADR-07) + 2 trigger chặn UPDATE/DELETE
+- [x] Enum đúng SRS: `Role`, `UserStatus`, `CampaignStatus`, `RoundStatus`, `FinalStatus`
+- [x] `candidates.ai_parsed_skills` dùng `Json` (jsonb)
+- [x] `candidates.ai_match_score` **nullable** + có `ai_processed_at`, `ai_error` (chịu lỗi AI)
+- [x] UNIQUE `(round_id, candidate_id, interviewer_id)` trên `evaluations`
+- [x] UNIQUE index `candidates.tracking_code`
+- [x] Index `(campaign_id, ai_match_score DESC)`
+- [x] CHECK `criteria.weight` trong `[0,1]` + 6 CHECK khác (điểm ≥ 0, AI score 0–100, ngày hợp lệ, order > 0)
+- [x] Migration đầu tiên chạy thành công: `20261028092243_init`
+- [x] Seed 4 user demo (idempotent)
+- [ ] `EXPLAIN ANALYZE` xác nhận query xếp hạng dùng index — làm ở Phase 2 khi có dữ liệu
 
 ### 1.3. Khung NestJS
 
-- [ ] `nest new` với strict TypeScript
-- [ ] Cấu trúc module: `auth`, `users`, `campaigns`, `rounds`, `candidates`, `evaluations`, `audit`, `queue`, `storage`, `mail`
-- [ ] `PrismaModule` global, `ConfigModule` validate bằng Zod/Joi (fail-fast nếu thiếu env)
-- [ ] Global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`)
-- [ ] Global exception filter → **RFC 7807** `application/problem+json`
-- [ ] Response interceptor → envelope `{ data, meta }`
-- [ ] `LoggerModule` (Pino) + request-id middleware
-- [ ] Swagger tại `/api/docs`, có Bearer auth
+- [x] NestJS 10 + strict TypeScript (scaffold thủ công, không dùng `nest new`)
+- [x] `PrismaModule` global, `ConfigModule` validate bằng Zod (fail-fast nếu thiếu env)
+- [x] Global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`)
+- [x] Global exception filter → **RFC 7807** `application/problem+json`
+- [x] Response interceptor → envelope `{ data, meta }`
+- [x] Swagger tại `/api/docs`, có Bearer auth
+- [ ] `LoggerModule` (Pino) + request-id middleware — Phase 7
+- [ ] Các module `campaigns`, `rounds`, `candidates`, `evaluations`, `mail` — Phase 2/5
 
-**Verify:** `GET /api/docs` render; gọi endpoint sai body trả 422 đúng format problem+json.
+**Verify:** `GET /api/docs` render; body sai trả `400` + `application/problem+json` (đã test).
 
 ### 1.4. Auth & RBAC
 
-- [ ] `users` seed: 1 admin, 3 interviewer (password hash bcrypt cost 12)
-- [ ] `POST /auth/login` → Access Token 15m + Refresh Cookie 7d
-- [ ] Cookie: `HttpOnly`, `Secure` (theo env), `SameSite=Strict`, `Path=/api/v1/auth`
-- [ ] `POST /auth/refresh` có **rotation** (thu hồi token cũ, lưu hash trong `users.refresh_token`)
-- [ ] `POST /auth/logout` xoá refresh token trong DB + clear cookie
-- [ ] `JwtAuthGuard` toàn cục, `@Public()` decorator để mở endpoint
-- [ ] `RolesGuard` + `@Roles(Role.ADMIN)`
-- [ ] Test: gọi endpoint Admin bằng token Interviewer → **403**
+- [x] `users` seed: 1 admin, 3 interviewer (bcrypt cost 12)
+- [x] `POST /auth/login` → Access Token 15m + Refresh Cookie 7d
+- [x] Cookie: `HttpOnly`, `Secure` (theo env), `SameSite=Strict`, `Path=/api/v1/auth`
+- [x] `POST /auth/refresh` có **rotation** (lưu **hash SHA-256** trong `users.refresh_token_hash`)
+- [x] `POST /auth/logout` xoá refresh token trong DB + clear cookie
+- [x] `JwtAuthGuard` toàn cục, `@Public()` decorator để mở endpoint
+- [x] `RolesGuard` + `@Roles(Role.ADMIN)`
+- [x] Test: gọi endpoint Admin bằng token Interviewer → **403**, token rác → **401**
 
-**Verify:** Postman/Thunder Client collection `auth.http` chạy 5 case: login đúng, login sai (401), refresh, refresh bằng token cũ (401), logout.
+**Verify:** login đúng 200 · sai 401 · refresh rotation đổi hash · refresh sau logout 401 · `/admin/ping` ADMIN 200 / INTERVIEWER 403.
 
-**DoD Phase 1:** Dựng hạ tầng một lệnh; đăng nhập được; RBAC chặn đúng; migration + seed chạy lại được từ DB trống.
+### 1.5. Queue (ADR-05)
+
+- [x] `BullModule.forRootAsync` parse `REDIS_URL`, `prefix = QUEUE_PREFIX`
+- [x] Queue `cv-processing`: `attempts: 3`, backoff exponential **5000ms**, `removeOnComplete: 100`
+- [x] Consumer ping AI Service `/health` (Phase 3 thay bằng `/parse-cv` thật)
+- [x] DLQ `cv-processing-dlq`: job hết lượt thử được chép sang kèm `failedReason`
+- [x] Endpoint ADMIN: `POST /admin/queue-probe`, `GET /admin/queue-probe`, `GET /admin/queue-probe/:id`
+
+**Verify:** AI sống → job `completed`; tắt AI → `attemptsMade=3` sau 5s+10s → `failed` + 1 job trong DLQ.
+
+### 1.6. Upload CV lên Object Storage (ADR-06)
+
+- [x] `S3Client` (forcePathStyle, checksum `WHEN_REQUIRED` cho S3-compatible)
+- [x] `StorageService.ensureBucket()` idempotent, `putObject`, `getSignedDownloadUrl`
+- [x] Kiểm **magic-byte** `%PDF` + giới hạn 5 MB (`CV_UPLOAD_LIMITS` dùng chung FE/BE)
+- [x] Key server sinh `cv/YYYY/MM/{uuid}.pdf`, chặn key ngoài prefix `cv/`
+- [x] Endpoint ADMIN: `POST /admin/storage-probe`, `GET /admin/storage-probe/health`, `GET /admin/storage-probe/download?key=`
+
+**Verify:** PDF thật → `201` + signed URL tải về `200` khớp SHA-256; file giả `.pdf` → `400`; file 6 MB → `413`.
+
+**DoD Phase 1:** Dựng hạ tầng một lệnh; đăng nhập được; RBAC chặn đúng; migration + seed chạy lại được từ DB trống; queue có retry + DLQ; CV lên object storage private và chỉ đọc qua signed URL.
 
 ---
 

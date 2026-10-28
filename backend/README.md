@@ -33,10 +33,12 @@ backend/
 │   │   ├── guards/             # JwtAuthGuard, RolesGuard
 │   │   └── interceptors/       # ResponseInterceptor → { data, meta }
 │   ├── infra/
-│   │   └── prisma/             # PrismaService + PrismaModule (global)
+│   │   ├── prisma/             # PrismaService + PrismaModule (global)
+│   │   ├── storage/            # S3Client, StorageService, kiểm magic-byte PDF
+│   │   └── queue/              # BullMQ: cv-processing + DLQ + processor
 │   └── modules/
 │       ├── auth/               # login, refresh (rotation), logout, me
-│       ├── admin/              # endpoint chẩn đoán RBAC
+│       ├── admin/              # chẩn đoán RBAC, storage, queue
 │       └── health/             # /health (liveness), /health/ready (DB)
 ├── tsconfig.json
 ├── nest-cli.json
@@ -56,6 +58,31 @@ Từ Phase 2 sẽ mở rộng thêm `modules/`: `campaigns/`, `rounds/`, `candid
 | `POST` | `/api/v1/auth/logout` | Public (thu hồi token) |
 | `GET` | `/api/v1/auth/me` | Đã đăng nhập |
 | `GET` | `/api/v1/admin/ping` | `ADMIN` |
+| `GET` | `/api/v1/admin/storage-probe/health` | `ADMIN` |
+| `POST` | `/api/v1/admin/storage-probe` | `ADMIN` — multipart field `file`, PDF ≤ 5 MB |
+| `GET` | `/api/v1/admin/storage-probe/download?key=` | `ADMIN` — signed URL mới |
+| `POST` | `/api/v1/admin/queue-probe` | `ADMIN` — đẩy 1 job thử |
+| `GET` | `/api/v1/admin/queue-probe` | `ADMIN` — counts + DLQ |
+| `GET` | `/api/v1/admin/queue-probe/:id` | `ADMIN` — trạng thái job |
+
+> Các endpoint `*-probe` là **dụng cụ chẩn đoán Phase 1**. Phase 2 sẽ bọc cùng service
+> bằng API nghiệp vụ thật (`POST /public/apply`, re-process job...).
+
+## Upload CV (ADR-0006)
+
+- Server nhận `multipart`, giữ trong RAM, kiểm **4 byte đầu = `%PDF`** rồi mới đẩy lên RustFS.
+- Giới hạn 5 MB dùng chung `CV_UPLOAD_LIMITS` từ `@ats/shared`.
+- Key do server sinh: `cv/{YYYY}/{MM}/{uuid}.pdf`; bucket private, chỉ đọc qua signed URL TTL 300s.
+- `sha256` của file được trả về để Phase 2 ghi vào `candidates.cv_file_hash`.
+
+## Queue (ADR-0005)
+
+| Thành phần | Giá trị |
+|---|---|
+| Queue | `cv-processing` |
+| Retry | 3 lần, backoff exponential 5s (5s → 10s) |
+| DLQ | `cv-processing-dlq` — chép job khi hết lượt thử, kèm `failedReason` |
+| Phase 1 | Job ping `GET {AI_SERVICE_URL}/health`; Phase 3 gọi `/parse-cv` thật |
 
 ## Quy ước
 

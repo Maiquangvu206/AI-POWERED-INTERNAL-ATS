@@ -85,20 +85,30 @@ Ngày chốt: **2026-10-28**.
 | **Bối cảnh** | `@nestjs/config` **không merge** nhiều file theo kiểu fallback từng biến; `backend/.env` chỉ chứa `DATABASE_URL` nên thiếu `JWT_SECRET` |
 | **Hệ quả** | `backend/.env` chỉ giữ `DATABASE_URL` (cho Prisma); mọi biến khác đặt ở `.env` gốc. Đã từng gây lỗi `JWT_SECRET: Required` khi đổi cấu trúc thư mục — nay cố định `../.env` |
 
-## 10. Chiến lược upload CV: **quyết định ở Phase 2**
+## 10. Chiến lược upload CV: **server-side stream** (đã chốt ở Phase 1)
 
-Hai phương án đã ghi trong ADR-0006, chưa chốt:
+| | |
+|---|---|
+| **Quyết định** | FE gửi `multipart/form-data` → Core API → RustFS. Không dùng presigned PUT |
+| **Lý do** | Bắt buộc kiểm **magic-byte** (`%PDF`) ở server (US-03); presigned PUT chỉ kiểm được `Content-Type` do client khai |
+| **Giới hạn** | 5 MB (`CV_UPLOAD_LIMITS` trong `@ats/shared`), chỉ PDF, 1 file/request |
+| **Kiểm tra** | 4 byte đầu phải là `%PDF`; file > 5 MB bị Multer chặn → **413**; nội dung sai → **400** |
+| **Key** | `cv/{YYYY}/{MM}/{uuid}.pdf` — server sinh, không dùng tên gốc |
+| **Đọc file** | Chỉ qua signed URL TTL 300s; key ngoài prefix `cv/` bị từ chối |
 
-| Phương án | Ưu | Nhược |
-|---|---|---|
-| Presigned PUT (FE → S3 trực tiếp) | Giảm tải API, upload nhanh | Khó validate magic-byte ở server; phải tin client |
-| Server-side stream (FE → API → S3) | Validate được magic-byte, ghi audit ngay | API phải chịu băng thông file |
+## 11. Hàng đợi: **BullMQ + DLQ tự dựng**
 
-**Xu hướng:** chọn **server-side stream** vì magic-byte check là yêu cầu bảo mật bắt buộc (US-03) và file chỉ ≤ 5MB.
+| | |
+|---|---|
+| **Quyết định** | Queue `cv-processing`, `attempts: 3`, backoff exponential **5000ms** (5s → 10s), `removeOnComplete: 100` |
+| **DLQ** | BullMQ không có DLQ sẵn → khi `attemptsMade >= attempts`, processor ghi job vào `cv-processing-dlq` kèm `failedReason`, `originalJobId` |
+| **Vì sao không auto-remove job chết** | `removeOnFail: 500` giữ lại 500 job lỗi gần nhất để điều tra |
+| **Redis** | `maxmemory-policy noeviction` — nếu evict, job biến mất không dấu vết |
+| **Phase 1** | Job chỉ `GET /health` của AI Service để chứng minh đường ống; Phase 3 thay bằng gọi `/parse-cv` thật |
 
 ---
 
-## 6. Ghi chú môi trường phát triển
+## 12. Ghi chú môi trường phát triển
 
 | Hạng mục | Trạng thái | Ảnh hưởng |
 |---|---|---|
@@ -106,10 +116,6 @@ Hai phương án đã ghi trong ADR-0006, chưa chốt:
 | npm | ✅ 11.13.0 | Dùng cho toàn bộ workspace |
 | Python | ✅ 3.13.7 | OK (xem mục 2) |
 | Git | ✅ 2.51.0, remote `Maiquangvu206/AI-POWERED-INTERNAL-ATS` | OK |
-| **Docker** | ❌ **Chưa cài** (`docker` không có trên PATH, `C:\Program Files\Docker` không tồn tại) | **Block Phase 1** — cần Docker Desktop hoặc PostgreSQL/Redis/MinIO native |
-| WSL2 | ❌ Chưa bật | Docker Desktop cần WSL2 hoặc Hyper-V |
-
-### Việc cần làm trước Phase 1
-
-1. Cài **Docker Desktop** (bật WSL2: `wsl --install` rồi reboot), **hoặc**
-2. Cài native: PostgreSQL 16 + Redis (Memurai/WSL) + MinIO server, và cập nhật `DATABASE_URL` / `REDIS_URL` / `S3_ENDPOINT`.
+| **Docker Desktop** | ✅ 29.9.2 (Server chạy, compose v5.6.1) | Hạ tầng dựng bằng `npm run infra:up` |
+| PostgreSQL native | ⚠️ chiếm cổng 5432 | Container map ra **5433** (mục 7) |
+| `php.exe` | ⚠️ chiếm cổng 8000 | AI Service dùng **8010** (mục 5) |

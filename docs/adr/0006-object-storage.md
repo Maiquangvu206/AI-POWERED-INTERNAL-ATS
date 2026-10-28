@@ -19,17 +19,16 @@ Dùng **Object Storage tương thích S3**:
 
 | Môi trường | Dịch vụ |
 |---|---|
-| Local dev | MinIO (Docker) |
+| Local dev | **RustFS** (xem `DECISIONS.md §6` — MinIO không còn publish image) |
 | Production | AWS S3 / Cloudflare R2 |
 
 Chi tiết:
 
-- Bucket **private**, không bao giờ public-read.
-- Upload theo 1 trong 2 hướng (chốt ở Phase 2 khi implement):
-  - **Presigned PUT** — FE upload trực tiếp, giảm tải API.
-  - **Server-side stream** — API nhận `multipart`, tự đẩy lên S3 (đơn giản hơn, kiểm soát magic-byte tốt hơn).
-- Truy cập file bằng **signed URL có TTL ≤ 5 phút**.
-- Key lưu theo cấu trúc `campaigns/{campaignId}/candidates/{candidateId}/{uuid}.pdf` — không dùng tên file gốc (chống path traversal và lộ tên ứng viên).
+- Bucket **private**, không bao giờ public-read (`storage-init` tạo bucket `cv-files`).
+- Hướng upload đã chốt: **server-side stream** — Core API nhận `multipart`, tự kiểm tra nội dung rồi đẩy lên S3. Lý do: bắt buộc kiểm **magic-byte** (`%PDF`) ở server (US-03) và file chỉ ≤ 5 MB nên băng thông API không phải vấn đề. Presigned PUT bị loại vì phải tin `Content-Type` do client gửi.
+- Truy cập file bằng **signed URL có TTL ngắn** (`S3_SIGNED_URL_TTL=300`, tối đa 3600).
+- Key do server sinh: `cv/{YYYY}/{MM}/{uuid}.pdf` — không dùng tên file gốc (chống path traversal và lộ tên ứng viên). Khoá được lưu ở `candidates.cv_file_url`, không bao giờ trả ra ngoài.
+- Chỉ object dưới prefix `cv/` mới được cấp signed URL (`StorageService.isManagedKey`).
 
 ## Hệ quả
 

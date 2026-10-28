@@ -7,6 +7,8 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { validateEnv } from './config/env.validation';
 import { PrismaModule } from './infra/prisma/prisma.module';
+import { QueueModule } from './infra/queue/queue.module';
+import { StorageModule } from './infra/storage/storage.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
@@ -22,6 +24,8 @@ import { HealthModule } from './modules/health/health.module';
       cache: true,
     }),
     PrismaModule,
+    QueueModule,
+    StorageModule,
     HealthModule,
     AuthModule,
     AdminModule,

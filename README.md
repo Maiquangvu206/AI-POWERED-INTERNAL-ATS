@@ -12,7 +12,8 @@
 
 > **Trạng thái hiện tại:**
 > - ✅ **Phase 0** — monorepo 4 tầng (`frontend` / `backend` / `ai` / `shared`), tooling, 8 ADR.
-> - 🟨 **Phase 1** — hạ tầng Docker (Postgres 16 · Redis 7 · RustFS · Mailpit) ✅, Prisma schema 9 bảng + constraint ✅, Auth/JWT/RBAC ✅. **Còn:** BullMQ producer/consumer, luồng upload CV lên object storage.
+> - ✅ **Phase 1** — hạ tầng Docker (Postgres 16 · Redis 7 · RustFS · Mailpit), Prisma 9 bảng + 7 CHECK + trigger append-only, Auth/JWT/RBAC, **BullMQ retry + DLQ**, **upload CV lên object storage (magic-byte, signed URL)**.
+> - ⬜ **Phase 2** — Campaigns + Rounds (US-02) và Public Portal nhận hồ sơ (US-03).
 >
 > README này là **nguồn sự thật duy nhất (single source of truth)** về kiến trúc, tech stack và lộ trình triển khai.
 
@@ -179,7 +180,7 @@ Ký hiệu: **Đã chốt** = có trong SRS v2.0.0 · **Bổ sung** = quyết đ
 | AI Service | **Pydantic v2 · `bge-m3` · Structured Output (JSON mode)** | `bge-m3` đa ngôn ngữ Anh–Việt tốt hơn MiniLM; Pydantic đảm bảo output có schema |
 | OCR Fallback | **PaddleOCR / Tesseract** | Xử lý CV dạng ảnh quét, CV xuất từ Canva |
 | Async | **Redis 7 + BullMQ** | Retry, backoff, DLQ — thay cho HTTP call trực tiếp (ADR-05) |
-| Object Storage | **RustFS (dev) → S3 / Cloudflare R2 (prod)** + Presigned URL | Không phụ thuộc disk container (ADR-06) |
+| Object Storage | **RustFS (dev) → S3 / Cloudflare R2 (prod)** — upload server-side, đọc bằng signed URL | Không phụ thuộc disk container (ADR-06) |
 | Observability | **Pino · OpenTelemetry · Sentry** | Truy vết lỗi xuyên service |
 | Testing | **Jest + Supertest · Pytest · Playwright** | Kiểm chứng Acceptance Criteria |
 | Hạ tầng | **Docker Compose · GitHub Actions · Nginx** | Dựng môi trường bằng một lệnh, CI tự động |
@@ -403,8 +404,8 @@ ALTER TABLE criteria
 ### ADR-06 — Lưu CV trên Object Storage
 
 - **Bối cảnh:** `cv_file_url` xuất hiện trong ERD nhưng chưa xác định nơi lưu. Local disk sẽ mất file khi container restart và không chia sẻ được giữa các replica.
-- **Quyết định:** **RustFS** (S3-compatible) ở môi trường dev, **S3 / Cloudflare R2** ở production. Upload qua **Presigned URL**, bucket private, truy cập bằng signed URL có TTL ngắn.
-- **Hệ quả:** (+) Stateless API, scale ngang dễ dàng. (−) Thêm một thành phần hạ tầng và chi phí egress.
+- **Quyết định:** **RustFS** (S3-compatible) ở môi trường dev, **S3 / Cloudflare R2** ở production. Upload **server-side stream** (Core API nhận multipart → kiểm magic-byte `%PDF` → đẩy lên S3), bucket private, truy cập bằng signed URL có TTL 300s. Presigned PUT bị loại vì không kiểm được nội dung file ở server.
+- **Hệ quả:** (+) Stateless API, scale ngang dễ dàng, chặn được file giả mạo. (−) Thêm một thành phần hạ tầng và chi phí egress.
 
 ### ADR-07 — Audit Log & UNIQUE Constraint cho tính công bằng
 
@@ -445,14 +446,14 @@ Quy ước chung: prefix `/api/v1`, JSON envelope `{ data, meta?, error? }`, l�
 
 > Checklist thực thi chi tiết (từng task, DoD, quality gate, rủi ro) nằm tại **[`docs/BUILD-CHECKLIST.md`](docs/BUILD-CHECKLIST.md)**. Bảng dưới là bản tóm tắt.
 
-### Phase 1 — Nền tảng & Hạ tầng (Tuần 1–2)
+### Phase 1 — Nền tảng & Hạ tầng (Tuần 1–2) ✅
 
-- [ ] Khởi tạo monorepo: `frontend`, `backend`, `ai`, `shared`
-- [ ] Docker Compose: PostgreSQL 16, Redis 7, RustFS, Mailpit
-- [ ] Prisma schema sinh từ ERD + migration đầu tiên (kèm UNIQUE constraint & index)
-- [ ] Auth: login, refresh rotation, RBAC Guard
-- [ ] BullMQ producer/consumer + DLQ
-- [ ] Presigned URL upload flow (ADR-06)
+- [x] Khởi tạo monorepo: `frontend`, `backend`, `ai`, `shared`
+- [x] Docker Compose: PostgreSQL 16, Redis 7, RustFS, Mailpit
+- [x] Prisma schema sinh từ ERD + migration đầu tiên (kèm UNIQUE constraint & index)
+- [x] Auth: login, refresh rotation, RBAC Guard
+- [x] BullMQ producer/consumer + DLQ
+- [x] Upload CV qua server-side stream + magic-byte + signed URL (ADR-06)
 
 ### Phase 2 — AI Pipeline (Tuần 3–4)
 
@@ -533,9 +534,12 @@ backend/src/                 ai/app/                    frontend/src/
 │              filters,      ├── services/ (P3)         ├── features/ (P6)
 │              decorators)   └── schemas/  (P3)         └── shared/   (P6)
 ├── config/                  prisma/
-├── infra/prisma/            ├── schema.prisma
-└── modules/                 ├── migrations/
-    ├── auth/                └── seed.ts
+├── infra/                   ├── schema.prisma
+│   ├── prisma/              ├── migrations/
+│   ├── storage/             └── seed.ts
+│   └── queue/
+└── modules/
+    ├── auth/
     ├── admin/
     └── health/
 ```
@@ -574,19 +578,31 @@ npm run dev:ai     # ai-service :8010 (cần activate venv trước)
 | URL | Kỳ vọng |
 |---|---|
 | http://localhost:3000/api/v1/health | `{"status":"ok","service":"core-api",...}` |
+| http://localhost:3000/api/docs | Swagger UI của Core API |
 | http://localhost:5173 | Trang chủ, hiển thị "✓ core-api v0.1.0 — ok" |
 | http://localhost:8010/health | `{"status":"ok","service":"ai-service",...}` |
 | http://localhost:8010/docs | Swagger UI của AI Service |
+| http://localhost:9001 | RustFS Console (`minioadmin` / `minioadmin`) |
+| http://localhost:8025 | Mailpit — đọc email dev |
 
 **Hạ tầng (từ Phase 1):**
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d   # Postgres :5433, Redis :6379, RustFS :9000, Mailpit :8025
+npm run infra:up                                    # Postgres :5433, Redis :6379, RustFS :9000, Mailpit :8025
 npm run db:migrate                                  # prisma migrate dev
 npm run db:seed
+npm run infra:ps                                    # trạng thái container
 ```
 
-**Tài khoản demo (sau khi seed):** `admin@demo.com` / `Admin@123` · `reviewer@demo.com` / `Review@123`
+**Chẩn đoán Phase 1 (cần token ADMIN):**
+
+```bash
+curl -X POST http://localhost:3000/api/v1/admin/queue-probe -H "Authorization: Bearer <token>"
+curl http://localhost:3000/api/v1/admin/queue-probe -H "Authorization: Bearer <token>"
+curl -F "file=@cv.pdf;type=application/pdf" http://localhost:3000/api/v1/admin/storage-probe -H "Authorization: Bearer <token>"
+```
+
+**Tài khoản demo (sau khi seed):** `admin@demo.com` / `Admin@123` · `reviewer1@demo.com` (và `reviewer2`, `reviewer3`) / `Review@123`
 
 ---
 
