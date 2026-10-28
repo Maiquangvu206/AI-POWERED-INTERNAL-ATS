@@ -1,0 +1,35 @@
+# Chuẩn hoá line-ending cho repo đa nền tảng (Windows dev, Linux CI)
+* text=auto eol=lf
+
+# Source
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js   text eol=lf
+*.mjs  text eol=lf
+*.cjs  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.py   text eol=lf
+*.sql  text eol=lf
+*.sh   text eol=lf
+*.prisma text eol=lf
+
+# Windows scripts giữ CRLF
+*.ps1  text eol=crlf
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# Binary
+*.pdf  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.woff binary
+*.woff2 binary
+
+# Lockfile không diff trong review
+pnpm-lock.yaml linguist-generated=true

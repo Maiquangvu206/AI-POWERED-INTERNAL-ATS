@@ -1,0 +1,250 @@
+// =============================================================================
+// AI-Powered Internal ATS — Prisma schema
+// Sinh từ ERD (SRS §3) + các bổ sung đã chốt trong docs/adr/
+//   ADR-0007: audit_logs + UNIQUE (round, candidate, interviewer)
+//   ADR-0004: tracking_code unique, entropy cao
+//   ADR-0006: cv_file_url trỏ tới object storage (không lưu binary)
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  INTERVIEWER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum CampaignStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+enum RoundStatus {
+  PENDING
+  IN_PROGRESS
+  LOCKED
+}
+
+enum FinalStatus {
+  PENDING
+  PASSED
+  REJECTED
+}
+
+// ----------------------------------------------------------------------------
+// Người dùng nội bộ (không có CANDIDATE — ứng viên là khách, xem SRS §2)
+// ----------------------------------------------------------------------------
+
+model User {
+  id               Int        @id @default(autoincrement())
+  email            String     @unique @db.VarChar(255)
+  passwordHash     String     @map("password_hash") @db.VarChar(255)
+  fullName         String     @map("full_name") @db.VarChar(150)
+  role             Role       @default(INTERVIEWER)
+  status           UserStatus @default(ACTIVE)
+  // Lưu HASH của refresh token (không lưu plaintext) để hỗ trợ rotation
+  refreshTokenHash String?    @map("refresh_token_hash") @db.VarChar(255)
+  lastLoginAt      DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  campaigns   Campaign[]
+  evaluations Evaluation[]
+  auditLogs   AuditLog[]
+
+  @@map("users")
+}
+
+// ----------------------------------------------------------------------------
+// Chiến dịch tuyển dụng
+// ----------------------------------------------------------------------------
+
+model Campaign {
+  id          Int            @id @default(autoincrement())
+  title       String         @db.VarChar(200)
+  slug        String         @unique @db.VarChar(200)
+  description String?        @db.Text
+  // Nội dung JD dùng cho AI matching — tách khỏi description để không lẫn marketing
+  jdText      String         @map("jd_text") @db.Text
+  startDate   DateTime       @map("start_date") @db.Date
+  endDate     DateTime       @map("end_date") @db.Date
+  status      CampaignStatus @default(DRAFT)
+  createdBy   Int            @map("created_by")
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  creator    User        @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  rounds     Round[]
+  candidates Candidate[]
+
+  @@index([status, startDate])
+  @@map("campaigns")
+}
+
+// ----------------------------------------------------------------------------
+// Vòng thi
+// ----------------------------------------------------------------------------
+
+model Round {
+  id         Int         @id @default(autoincrement())
+  campaignId Int         @map("campaign_id")
+  roundName  String      @map("round_name") @db.VarChar(100)
+  orderIndex Int         @map("order_index")
+  status     RoundStatus @default(PENDING)
+  // Điều kiện unblind là status = LOCKED (ADR-0002); lưu thêm ai khoá để audit
+  lockedAt   DateTime?   @map("locked_at") @db.Timestamptz(6)
+  lockedBy   Int?        @map("locked_by")
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  campaign    Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  criteria    Criteria[]
+  candidates  Candidate[]
+  evaluations Evaluation[]
+
+  @@unique([campaignId, orderIndex])
+  @@index([campaignId, status])
+  @@map("rounds")
+}
+
+// ----------------------------------------------------------------------------
+// Tiêu chí chấm điểm (rubric) — tổng weight mỗi round phải = 1.00
+// ----------------------------------------------------------------------------
+
+model Criteria {
+  id        Int      @id @default(autoincrement())
+  roundId   Int      @map("round_id")
+  title     String   @db.VarChar(200)
+  maxScore  Decimal  @map("max_score") @db.Decimal(5, 2)
+  weight    Decimal  @db.Decimal(4, 3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  round   Round              @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  details EvaluationDetail[]
+
+  @@unique([roundId, title])
+  @@map("criteria")
+}
+
+// ----------------------------------------------------------------------------
+// Ứng viên — không có tài khoản, tra cứu bằng tracking_code (ADR-0004)
+// ----------------------------------------------------------------------------
+
+model Candidate {
+  id          Int      @id @default(autoincrement())
+  campaignId  Int      @map("campaign_id")
+  trackingCode String  @unique @map("tracking_code") @db.VarChar(20)
+
+  fullName String @map("full_name") @db.VarChar(150)
+  email    String @db.VarChar(255)
+  phone    String @db.VarChar(20)
+
+  // Trỏ tới object storage; KHÔNG bao giờ public (ADR-0006)
+  cvFileUrl  String  @map("cv_file_url") @db.VarChar(500)
+  // SHA-256 để phát hiện nộp trùng (Phase 7)
+  cvFileHash String? @map("cv_file_hash") @db.Char(64)
+
+  currentRoundId Int? @map("current_round_id")
+
+  // Kết quả AI — nullable để chịu lỗi AI Service mà không mất hồ sơ
+  aiMatchScore     Decimal?  @map("ai_match_score") @db.Decimal(5, 2)
+  aiParsedSkills   Json?     @map("ai_parsed_skills")
+  aiMatchBreakdown Json?     @map("ai_match_breakdown")
+  aiProcessedAt    DateTime? @map("ai_processed_at") @db.Timestamptz(6)
+  aiError          String?   @map("ai_error") @db.Text
+
+  finalStatus FinalStatus @default(PENDING) @map("final_status")
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  campaign     Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  currentRound Round?       @relation(fields: [currentRoundId], references: [id], onDelete: SetNull)
+  evaluations  Evaluation[]
+
+  @@index([campaignId, aiMatchScore(sort: Desc)])
+  @@index([campaignId, finalStatus])
+  @@index([currentRoundId])
+  @@index([email])
+  @@map("candidates")
+}
+
+// ----------------------------------------------------------------------------
+// Phiếu đánh giá của 1 giám khảo cho 1 ứng viên ở 1 vòng
+// ----------------------------------------------------------------------------
+
+model Evaluation {
+  id            Int      @id @default(autoincrement())
+  roundId       Int      @map("round_id")
+  candidateId   Int      @map("candidate_id")
+  interviewerId Int      @map("interviewer_id")
+  totalScore    Decimal  @default(0) @map("total_score") @db.Decimal(6, 2)
+  generalNotes  String?  @map("general_notes") @db.Text
+  submittedAt   DateTime @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  round       Round              @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  candidate   Candidate          @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  interviewer User               @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
+  details     EvaluationDetail[]
+
+  // Chặn nộp trùng ở tầng DB (ADR-0007) — không chỉ check ở application layer
+  @@unique([roundId, candidateId, interviewerId], map: "uq_eval_per_round_candidate_interviewer")
+  @@index([candidateId, roundId])
+  @@map("evaluations")
+}
+
+model EvaluationDetail {
+  id           Int     @id @default(autoincrement())
+  evaluationId Int     @map("evaluation_id")
+  criterionId  Int     @map("criterion_id")
+  score        Decimal @db.Decimal(5, 2)
+  comment      String? @db.VarChar(1000)
+
+  evaluation Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  criterion  Criteria   @relation(fields: [criterionId], references: [id], onDelete: Restrict)
+
+  @@unique([evaluationId, criterionId])
+  @@map("evaluation_details")
+}
+
+// ----------------------------------------------------------------------------
+// Audit log (ADR-0007) — append-only, ghi mọi mutation nhạy cảm
+// ----------------------------------------------------------------------------
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  actorId    Int?     @map("actor_id")
+  action     String   @db.VarChar(100)
+  entityType String   @map("entity_type") @db.VarChar(50)
+  entityId   String?  @map("entity_id") @db.VarChar(50)
+  before     Json?
+  after      Json?
+  ip         String?  @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.VarChar(255)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}

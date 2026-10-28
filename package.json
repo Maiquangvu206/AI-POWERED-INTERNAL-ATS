@@ -1,0 +1,57 @@
+{
+  "name": "ai-powered-internal-ats",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hệ thống Quản lý Tuyển dụng & Lọc CV bằng AI (AI-Powered Internal ATS)",
+  "author": "Mai Quang Vu",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "backend",
+    "frontend",
+    "ai",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run start:dev -w @ats/backend",
+    "dev:web": "npm run dev -w @ats/frontend",
+    "dev:ai": "npm run dev -w @ats/ai",
+    "build": "npm run build -w @ats/shared && npm run build -w @ats/backend && npm run build -w @ats/frontend",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:py": "python -m ruff check ai",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "format:py": "python -m ruff format ai",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck:py": "python -m mypy ai/app",
+    "test": "npm run test --workspaces --if-present",
+    "test:py": "python -m pytest ai -q",
+    "db:generate": "npm run db:generate -w @ats/backend",
+    "db:migrate": "npm run db:migrate -w @ats/backend",
+    "db:studio": "npm run db:studio -w @ats/backend",
+    "db:seed": "npm run db:seed -w @ats/backend",
+    "db:reset": "npm run db:reset -w @ats/backend",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:ps": "docker compose -f infra/docker-compose.yml ps",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.1",
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.11",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.2"
+  }
+}

@@ -40,7 +40,7 @@
 
 ### 0.2. Môi trường & công cụ
 
-- [ ] Cài Node.js 22 LTS, pnpm 9, Python 3.12, Docker Desktop, Git
+- [ ] Cài Node.js 22 LTS, npm 10, Python 3.12+, Docker Desktop, Git
 - [ ] Cấu hình Git: `user.name`, `user.email`, `core.autocrlf`
 - [ ] `.editorconfig` + `.gitignore` (bỏ `.env`, `node_modules`, `__pycache__`, `*.pdf` upload test)
 - [ ] Pre-commit hook: ESLint + Prettier + Ruff (dùng `husky` + `lint-staged`)
@@ -50,7 +50,7 @@
 
 ### 0.3. Khung repository
 
-- [ ] Monorepo pnpm workspace: `apps/core-api`, `apps/ai-service`, `apps/web`, `packages/shared`
+- [ ] Monorepo npm workspaces: `backend`, `frontend`, `ai`, `shared`
 - [ ] `docs/adr/` với 8 file ADR (01→08)
 - [ ] `docs/diagrams/` chứa Mermaid source
 - [ ] `Makefile` hoặc `package.json` scripts thống nhất: `dev`, `build`, `test`, `lint`, `migrate`, `seed`
@@ -286,7 +286,7 @@
 - [ ] Vite + React 19 + TypeScript strict
 - [ ] Tailwind + shadcn/ui, dark mode
 - [ ] TanStack Query (server state) + Zustand (UI state nhỏ)
-- [ ] React Hook Form + Zod, schema import từ `packages/shared`
+- [ ] React Hook Form + Zod, schema import từ `@ats/shared`
 - [ ] Axios instance: baseURL, withCredentials, interceptor refresh-on-401 (**queue request** khi đang refresh)
 - [ ] Router theo role: `/`, `/portal`, `/admin`
 - [ ] i18n `vi` mặc định (chuẩn bị `en`)
@@ -399,7 +399,7 @@
 - [ ] Không còn `console.log` / `print` debug
 - [ ] Không còn `TODO` chưa gắn issue
 
-**DoD Phase 8:** `pnpm test` xanh toàn bộ; CI chạy < 10 phút; báo cáo coverage có trong PR.
+**DoD Phase 8:** `npm test` xanh toàn bộ; CI chạy < 10 phút; báo cáo coverage có trong PR.
 
 ---
 
@@ -407,13 +407,13 @@
 
 ### 9.1. Build & CI
 
-- [ ] `Dockerfile` multi-stage cho core-api, ai-service, web (image web serve bằng Nginx)
+- [ ] `Dockerfile` multi-stage cho backend, ai, frontend (image frontend serve bằng Nginx)
 - [ ] `docker compose -f docker-compose.prod.yml` chạy full stack, có `restart: unless-stopped`
 - [ ] GitHub Actions workflow:
   - `ci.yml`: lint → typecheck → unit test → build (PR)
   - `e2e.yml`: Playwright với compose (main)
   - `docker.yml`: build & push GHCR (tag)
-- [ ] Cache pnpm store + pip wheel + Docker layer
+- [ ] Cache npm store + pip wheel + Docker layer
 - [ ] Secret qua GitHub Secrets, không hard-code
 
 ### 9.2. Vận hành

@@ -1,4 +1,4 @@
-# AI-Powered Internal ATS
+﻿# AI-Powered Internal ATS
 
 **Hệ thống Quản lý Tuyển dụng & Lọc CV bằng AI** — ATS nội bộ cho doanh nghiệp vừa và nhỏ.
 
@@ -10,7 +10,11 @@
   <img alt="license" src="https://img.shields.io/badge/license-MIT-lightgrey" />
 </p>
 
-> **Trạng thái hiện tại:** Tài liệu SRS / Product Backlog / System Design đã ở mức *Baseline Approved* (v2.0.0). Repository đang ở giai đoạn **khởi tạo — chưa có mã nguồn**. README này đóng vai trò là **nguồn sự thật duy nhất (single source of truth)** về kiến trúc, tech stack và lộ trình triển khai.
+> **Trạng thái hiện tại:**
+> - ✅ **Phase 0** — monorepo 4 tầng (`frontend` / `backend` / `ai` / `shared`), tooling, 8 ADR.
+> - 🟨 **Phase 1** — hạ tầng Docker (Postgres 16 · Redis 7 · RustFS · Mailpit) ✅, Prisma schema 9 bảng + constraint ✅, Auth/JWT/RBAC ✅. **Còn:** BullMQ producer/consumer, luồng upload CV lên object storage.
+>
+> README này là **nguồn sự thật duy nhất (single source of truth)** về kiến trúc, tech stack và lộ trình triển khai.
 
 ---
 
@@ -115,7 +119,7 @@ flowchart LR
     subgraph Infra
         DB[("PostgreSQL 16")]
         REDIS[("Redis<br/>Queue + Cache")]
-        S3[("Object Storage<br/>MinIO / S3")]
+        S3[("Object Storage<br/>RustFS / S3")]
         MAIL["SMTP / Nodemailer"]
     end
 
@@ -175,7 +179,7 @@ Ký hiệu: **Đã chốt** = có trong SRS v2.0.0 · **Bổ sung** = quyết đ
 | AI Service | **Pydantic v2 · `bge-m3` · Structured Output (JSON mode)** | `bge-m3` đa ngôn ngữ Anh–Việt tốt hơn MiniLM; Pydantic đảm bảo output có schema |
 | OCR Fallback | **PaddleOCR / Tesseract** | Xử lý CV dạng ảnh quét, CV xuất từ Canva |
 | Async | **Redis 7 + BullMQ** | Retry, backoff, DLQ — thay cho HTTP call trực tiếp (ADR-05) |
-| Object Storage | **MinIO (dev) → S3 / Cloudflare R2 (prod)** + Presigned URL | Không phụ thuộc disk container (ADR-06) |
+| Object Storage | **RustFS (dev) → S3 / Cloudflare R2 (prod)** + Presigned URL | Không phụ thuộc disk container (ADR-06) |
 | Observability | **Pino · OpenTelemetry · Sentry** | Truy vết lỗi xuyên service |
 | Testing | **Jest + Supertest · Pytest · Playwright** | Kiểm chứng Acceptance Criteria |
 | Hạ tầng | **Docker Compose · GitHub Actions · Nginx** | Dựng môi trường bằng một lệnh, CI tự động |
@@ -399,7 +403,7 @@ ALTER TABLE criteria
 ### ADR-06 — Lưu CV trên Object Storage
 
 - **Bối cảnh:** `cv_file_url` xuất hiện trong ERD nhưng chưa xác định nơi lưu. Local disk sẽ mất file khi container restart và không chia sẻ được giữa các replica.
-- **Quyết định:** **MinIO** ở môi trường dev, **S3 / Cloudflare R2** ở production. Upload qua **Presigned URL**, bucket private, truy cập bằng signed URL có TTL ngắn.
+- **Quyết định:** **RustFS** (S3-compatible) ở môi trường dev, **S3 / Cloudflare R2** ở production. Upload qua **Presigned URL**, bucket private, truy cập bằng signed URL có TTL ngắn.
 - **Hệ quả:** (+) Stateless API, scale ngang dễ dàng. (−) Thêm một thành phần hạ tầng và chi phí egress.
 
 ### ADR-07 — Audit Log & UNIQUE Constraint cho tính công bằng
@@ -443,8 +447,8 @@ Quy ước chung: prefix `/api/v1`, JSON envelope `{ data, meta?, error? }`, l�
 
 ### Phase 1 — Nền tảng & Hạ tầng (Tuần 1–2)
 
-- [ ] Khởi tạo monorepo: `apps/core-api`, `apps/ai-service`, `apps/web`, `packages/shared`
-- [ ] Docker Compose: PostgreSQL 16, Redis 7, MinIO, MailHog
+- [ ] Khởi tạo monorepo: `frontend`, `backend`, `ai`, `shared`
+- [ ] Docker Compose: PostgreSQL 16, Redis 7, RustFS, Mailpit
 - [ ] Prisma schema sinh từ ERD + migration đầu tiên (kèm UNIQUE constraint & index)
 - [ ] Auth: login, refresh rotation, RBAC Guard
 - [ ] BullMQ producer/consumer + DLQ
@@ -479,65 +483,110 @@ Quy ước chung: prefix `/api/v1`, JSON envelope `{ data, meta?, error? }`, l�
 
 ---
 
-## 12. Cấu trúc repository dự kiến
+## 12. Cấu trúc repository
+
+**Nguyên tắc: 4 thư mục phẳng ở gốc — mỗi thư mục là một khối độc lập, đọc tên là hiểu ngay.**
 
 ```
 AI-POWERED-INTERNAL-ATS/
-├── apps/
-│   ├── core-api/                 # NestJS + Prisma
-│   │   ├── src/
-│   │   │   ├── modules/          # auth, campaign, round, candidate, evaluation, audit
-│   │   │   ├── common/           # guards, interceptors, filters
-│   │   │   └── main.ts
-│   │   └── prisma/schema.prisma
-│   ├── ai-service/               # FastAPI
-│   │   ├── app/
-│   │   │   ├── routers/          # parse, match, copilot
-│   │   │   ├── services/         # extractor, embedder, scorer, llm
-│   │   │   └── main.py
-│   │   └── tests/
-│   └── web/                      # React + Vite
-│       └── src/
-│           ├── features/         # public, interviewer, admin
-│           └── shared/
-├── packages/
-│   └── shared/                   # Zod schema & type dùng chung
-├── docs/
+│
+├── frontend/          🖥  Giao diện        React 19 + Vite + TypeScript
+├── backend/           ⚙️  API chính        NestJS + Prisma (auth, nghiệp vụ, queue)
+├── ai/                🤖  Xử lý AI         FastAPI + pdfplumber + sentence-transformers
+├── shared/            🔗  Dùng chung       Zod schema, enum, hằng số cho FE + BE
+│
+├── docs/              📄  Tài liệu
 │   ├── SRS-v2.0.0.pdf
-│   ├── adr/                      # 01 → 08
+│   ├── BUILD-CHECKLIST.md      # 11 phase, DoD, quality gate
+│   ├── DECISIONS.md            # decision log (npm, Python 3.13, port 8010...)
+│   ├── adr/                    # 0001 → 0008
 │   └── diagrams/
-├── infra/
-│   ├── docker-compose.yml
-│   └── nginx/
+│
+├── infra/             🐳  Hạ tầng          docker-compose (Postgres, Redis, RustFS, Mailpit)
+│
+├── .husky/            hooks pre-commit + commit-msg
+├── eslint.config.mjs
+├── commitlint.config.cjs
+├── .env.example
 └── README.md
+```
+
+**Quy ước "ai sở hữu cái gì":**
+
+| Câu hỏi | Trả lời | Thư mục |
+|---|---|---|
+| Cần thêm màn hình / form / component? | Giao diện | `frontend/` |
+| Cần thêm endpoint / bảng / nghiệp vụ? | API | `backend/` |
+| Cần bóc tách CV, tính điểm, gọi LLM? | Trí tuệ nhân tạo | `ai/` |
+| Cần validate / enum / hằng số dùng cho cả FE và BE? | Dùng chung | `shared/` |
+| Cần thêm Postgres/Redis/Object Storage? | Hạ tầng | `infra/` |
+
+Chi tiết từng thư mục có README riêng: [`frontend/`](frontend/README.md) · [`backend/`](backend/README.md) · [`ai/`](ai/README.md) · [`shared/`](shared/README.md).
+
+**Cấu trúc bên trong (Phase 0 → mục tiêu):**
+
+```
+backend/src/                 ai/app/                    frontend/src/
+├── main.ts                  ├── main.py                ├── main.tsx
+├── app.module.ts            ├── settings.py            ├── App.tsx
+├── common/   (guards,       ├── routers/  (P3)         ├── app/      (P6)
+│              filters,      ├── services/ (P3)         ├── features/ (P6)
+│              decorators)   └── schemas/  (P3)         └── shared/   (P6)
+├── config/                  prisma/
+├── infra/prisma/            ├── schema.prisma
+└── modules/                 ├── migrations/
+    ├── auth/                └── seed.ts
+    ├── admin/
+    └── health/
 ```
 
 ---
 
 ## 13. Getting Started
 
-> Chưa khả dụng — dự án đang ở Phase 0 (spec). Lệnh dưới đây là **hợp đồng cam kết** sẽ hoạt động sau Phase 1.
+**Yêu cầu:** Node.js ≥ 22, npm ≥ 10, Python ≥ 3.12, Docker (cần từ Phase 1).
 
 ```bash
 # 1. Clone
-git clone https://github.com/<your-username>/AI-POWERED-INTERNAL-ATS.git
+git clone https://github.com/Maiquangvu206/AI-POWERED-INTERNAL-ATS.git
 cd AI-POWERED-INTERNAL-ATS
 
 # 2. Cấu hình môi trường
-cp .env.example .env
+cp .env.example .env        # Windows PowerShell: Copy-Item .env.example .env
 
-# 3. Dựng hạ tầng (Postgres, Redis, MinIO, MailHog)
-docker compose -f infra/docker-compose.yml up -d
+# 3. Cài dependency (npm workspaces: core-api + web + shared)
+npm install
 
-# 4. Migration + seed
-pnpm --filter core-api prisma migrate dev
-pnpm --filter core-api seed
+# 4. Cài dependency Python cho AI Service
+cd ai
+python -m venv .venv
+# Windows: .venv\Scripts\activate   |   macOS/Linux: source .venv/bin/activate
+pip install -e ".[dev]"
+cd ..
 
-# 5. Chạy dev
-pnpm dev          # core-api :3000 · ai-service :8000 · web :5173
+# 5. Chạy dev (mở 2 terminal)
+npm run dev        # core-api :3000 + web :5173
+npm run dev:ai     # ai-service :8010 (cần activate venv trước)
 ```
 
-**Tài khoản demo:** `admin@demo.com` / `Admin@123` · `reviewer@demo.com` / `Review@123`
+**Kiểm tra nhanh**
+
+| URL | Kỳ vọng |
+|---|---|
+| http://localhost:3000/api/v1/health | `{"status":"ok","service":"core-api",...}` |
+| http://localhost:5173 | Trang chủ, hiển thị "✓ core-api v0.1.0 — ok" |
+| http://localhost:8010/health | `{"status":"ok","service":"ai-service",...}` |
+| http://localhost:8010/docs | Swagger UI của AI Service |
+
+**Hạ tầng (từ Phase 1):**
+
+```bash
+docker compose -f infra/docker-compose.yml up -d   # Postgres :5433, Redis :6379, RustFS :9000, Mailpit :8025
+npm run db:migrate                                  # prisma migrate dev
+npm run db:seed
+```
+
+**Tài khoản demo (sau khi seed):** `admin@demo.com` / `Admin@123` · `reviewer@demo.com` / `Review@123`
 
 ---
 
@@ -546,8 +595,9 @@ pnpm dev          # core-api :3000 · ai-service :8000 · web :5173
 | Tài liệu | Mô tả |
 |---|---|
 | [`docs/BUILD-CHECKLIST.md`](docs/BUILD-CHECKLIST.md) | **Checklist xây dựng chi tiết 11 phase** (Phase 0 → 10), kèm DoD, quality gates, rủi ro |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Decision log: npm workspaces, Python 3.13, LLM/embedding, ghi chú môi trường |
+| [`docs/adr/README.md`](docs/adr/README.md) | Index 8 Architecture Decision Records + template |
 | `docs/SRS-v2.0.0.pdf` | SRS, Product Backlog & System Design (baseline approved) |
-| `docs/adr/` | 8 Architecture Decision Records |
 | `docs/diagrams/` | Use Case, Sequence, Activity, ERD (Mermaid source) |
 
 **Tham chiếu tiêu chuẩn:** OWASP ASVS 4.0 (auth & upload) · RFC 7807 (problem details) · OpenAPI 3.1 · Nghị định 13/2023/NĐ-CP (bảo vệ dữ liệu cá nhân).
