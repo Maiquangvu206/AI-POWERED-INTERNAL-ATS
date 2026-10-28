@@ -4,11 +4,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Queue } from 'bullmq';
 import { Role } from '@ats/shared';
 import { Roles } from '../../common/decorators/roles.decorator';
-import {
-  CV_PROCESSING_DLQ,
-  CV_PROCESSING_JOB,
-  CV_PROCESSING_QUEUE,
-} from '../../infra/queue/queue.constants';
+import { CV_PROCESSING_DLQ, CV_PROCESSING_QUEUE } from '../../infra/queue/queue.constants';
+import { QueueService } from '../../infra/queue/queue.service';
 
 /**
  * Endpoint chẩn đoán queue — chỉ ADMIN.
@@ -20,14 +17,14 @@ import {
 @Controller('admin/queue-probe')
 export class QueueProbeController {
   constructor(
-    @InjectQueue(CV_PROCESSING_QUEUE) private readonly queue: Queue,
+    private readonly queueService: QueueService,
     @InjectQueue(CV_PROCESSING_DLQ) private readonly dlq: Queue,
   ) {}
 
   @Post()
   @ApiOperation({ summary: 'Đẩy một job thử vào queue cv-processing' })
   async enqueue(): Promise<{ jobId: string; queue: string; attempts: number }> {
-    const job = await this.queue.add(CV_PROCESSING_JOB, { probe: true });
+    const job = await this.queueService.enqueueCvProcessing({ probe: true });
 
     return {
       jobId: String(job.id),
@@ -46,7 +43,7 @@ export class QueueProbeController {
     deadJobs: Array<{ id: string; failedReason: string; data: unknown }>;
   }> {
     const [counts, deadLetterCounts, deadJobs] = await Promise.all([
-      this.queue.getJobCounts('wait', 'active', 'delayed', 'completed', 'failed'),
+      this.queueService.getCounts(),
       this.dlq.getJobCounts('wait', 'active', 'completed', 'failed'),
       this.dlq.getJobs(['wait', 'failed', 'completed'], 0, 20, false),
     ]);
@@ -77,7 +74,7 @@ export class QueueProbeController {
     processedOn: string | null;
     finishedOn: string | null;
   }> {
-    const job = await this.queue.getJob(id);
+    const job = await this.queueService.getJob(id);
 
     if (!job) {
       throw new NotFoundException(`Không tìm thấy job "${id}" trong queue ${CV_PROCESSING_QUEUE}`);

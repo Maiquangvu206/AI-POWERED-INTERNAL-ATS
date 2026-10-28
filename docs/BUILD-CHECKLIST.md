@@ -141,40 +141,45 @@
 
 ### 2.1. Campaign (US-02)
 
-- [ ] CRUD campaign với `slug` tự sinh từ title (unique, có xử lý trùng)
-- [ ] Validate: `start_date < end_date`, không tạo campaign khi thiếu JD
-- [ ] Chuyển trạng thái `DRAFT → OPEN → CLOSED` có state machine (không cho nhảy cóc)
-- [ ] `GET /public/campaigns?status=OPEN` chỉ trả campaign đang mở
+- [x] CRUD campaign với `slug` tự sinh từ title (bỏ dấu tiếng Việt, unique, thêm `-2`, `-3` khi trùng)
+- [x] Validate: `end_date > start_date`, `jdText` tối thiểu 20 ký tự
+- [x] Chuyển trạng thái `DRAFT → OPEN → CLOSED` có state machine (không nhảy cóc, không quay lại)
+- [x] `GET /public/campaigns?status=OPEN` chỉ trả campaign đang mở; DRAFT → 404/400
+- [x] Slug **bất biến** sau khi tạo (link công khai không chết khi đổi tiêu đề)
+- [x] Ghi `audit_logs`: `campaign.create/update/status_change/delete`
 
 ### 2.2. Round & Criteria (US-02)
 
-- [ ] Tạo nhiều round cho campaign, `order_index` duy nhất trong campaign
-- [ ] CRUD criteria trong round: `title`, `max_score`, `weight`
-- [ ] **Validate `SUM(weight) = 1.00`** trước khi cho round chuyển `IN_PROGRESS` (dùng tolerance 0.001)
-- [ ] Chặn xoá criterion nếu đã có `evaluation_details` tham chiếu
-- [ ] Chặn sửa rubric khi round đã `LOCKED`
+- [x] Tạo nhiều round cho campaign, `order_index` duy nhất (tự tăng nếu bỏ trống)
+- [x] CRUD criteria trong round: `title`, `maxScore`, `weight` (Decimal 5,2 / 4,3)
+- [x] **Validate `SUM(weight) = 1.00`** (±0.001) trước khi round chuyển `IN_PROGRESS`
+- [x] Chặn xoá criterion nếu đã có `evaluation_details` tham chiếu (map P2003 → 409)
+- [x] Chặn sửa rubric khi round đã `IN_PROGRESS` hoặc `LOCKED`
+- [x] Chặn xoá round khi đang có ứng viên (`current_round_id`)
+- [x] Round state machine `PENDING → IN_PROGRESS → LOCKED`, `LOCKED` ghi `locked_at`/`locked_by`
 
 ### 2.3. Public Application (US-03)
 
-- [ ] `POST /public/campaigns/:slug/apply` nhận `multipart/form-data`
-- [ ] Validate file: **magic bytes** `%PDF-`, ≤ 5MB, chỉ 1 file
-- [ ] Sanitize input: `full_name` (2–100 ký tự), `email` (RFC), `phone` (E.164 hoặc VN format)
-- [ ] Sinh `tracking_code` dạng `APP-YYYY-XXXX` — **retry 3 lần** nếu trùng unique
-- [ ] Upload file lên MinIO qua Presigned URL hoặc server-side stream (chọn 1 và ghi vào ADR)
-- [ ] Lưu `candidates` với `final_status = PENDING`
-- [ ] Enqueue job `CV_PROCESSING` (Phase 3 sẽ implement worker)
-- [ ] Trả `201` + `{ tracking_code }`
-- [ ] `GET /public/track/:code` — chỉ trả `full_name` (đã mask), `status`, `current_round`, **không** trả điểm chi tiết/email/phone
+- [x] `POST /public/campaigns/:slug/apply` nhận `multipart/form-data` (field `cv`)
+- [x] Validate file: **magic bytes** `%PDF`, ≤ 5MB, chỉ 1 file
+- [x] Sanitize input bằng `ApplyFormSchema` của `@ats/shared` (2–100 ký tự, email RFC, phone VN)
+- [x] Sinh `tracking_code` dạng `APP-YYYY-XXXX` — **retry 3 lần** nếu trùng unique; bỏ ký tự dễ nhầm I/O/0/1
+- [x] Upload lên RustFS qua **server-side stream** (đã ghi ADR-0006)
+- [x] Lưu `candidates` với `final_status = PENDING`, `cv_file_hash` = SHA-256
+- [x] Enqueue job `CV_PROCESSING` (worker thật ở Phase 3)
+- [x] Trả `201` + `{ trackingCode, submittedAt, campaign }`
+- [x] `GET /public/track/:code` — chỉ trả `fullName` đã che, `status`, `currentRound`; không trả email/phone/điểm
+- [x] Bù trừ: nếu tạo DB thất bại sau khi upload → xoá object (không để file mồ côi)
 
 ### 2.4. BullMQ
 
-- [ ] `QueueModule` cấu hình connection Redis, prefix `ats:`
-- [ ] Queue `cv-processing`: `attempts: 3`, `backoff: exponential 5s`, `removeOnComplete: 100`
-- [ ] Dead-letter queue `cv-processing-dlq`
-- [ ] Job payload có type + version (để migrate schema job sau này)
-- [ ] Endpoint admin `POST /admin/candidates/:id/reprocess` để chạy lại job
+- [x] `QueueModule` cấu hình connection Redis, prefix `ats:`
+- [x] Queue `cv-processing`: `attempts: 3`, `backoff: exponential 5s`, `removeOnComplete: 100`
+- [x] Dead-letter queue `cv-processing-dlq`
+- [x] Job payload có `type` + `version` (`{ type: 'CV_PROCESSING', version: 1 }`); payload lạ → `UnrecoverableError` → DLQ ngay
+- [x] Endpoint admin `POST /admin/candidates/:id/reprocess` để chạy lại job
 
-**DoD Phase 2:** Nộp CV qua Postman → DB có record → file nằm trong MinIO → job nằm trong Redis (`bull-board` hoặc `redis-cli KEYS`).
+**DoD Phase 2:** Nộp CV qua Postman → DB có record → file nằm trong RustFS → job nằm trong Redis và được xử lý xong.
 
 ---
 

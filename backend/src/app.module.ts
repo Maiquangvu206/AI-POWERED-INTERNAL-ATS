@@ -11,6 +11,9 @@ import { QueueModule } from './infra/queue/queue.module';
 import { StorageModule } from './infra/storage/storage.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { CampaignsModule } from './modules/campaigns/campaigns.module';
+import { CandidatesModule } from './modules/candidates/candidates.module';
 import { HealthModule } from './modules/health/health.module';
 
 @Module({
@@ -26,9 +29,12 @@ import { HealthModule } from './modules/health/health.module';
     PrismaModule,
     QueueModule,
     StorageModule,
+    AuditModule,
     HealthModule,
     AuthModule,
     AdminModule,
+    CampaignsModule,
+    CandidatesModule,
   ],
   providers: [
     // Thứ tự quan trọng: xác thực trước, phân quyền sau

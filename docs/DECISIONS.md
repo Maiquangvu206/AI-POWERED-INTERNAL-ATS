@@ -1,4 +1,4 @@
-# Decision Log — Phase 0
+# Decision Log — Phase 0–2
 
 Ghi lại các quyết định **chưa đủ tầm ADR** nhưng cần thống nhất để tránh tranh cãi về sau.
 Ngày chốt: **2026-10-28**.
@@ -104,11 +104,51 @@ Ngày chốt: **2026-10-28**.
 | **DLQ** | BullMQ không có DLQ sẵn → khi `attemptsMade >= attempts`, processor ghi job vào `cv-processing-dlq` kèm `failedReason`, `originalJobId` |
 | **Vì sao không auto-remove job chết** | `removeOnFail: 500` giữ lại 500 job lỗi gần nhất để điều tra |
 | **Redis** | `maxmemory-policy noeviction` — nếu evict, job biến mất không dấu vết |
-| **Phase 1** | Job chỉ `GET /health` của AI Service để chứng minh đường ống; Phase 3 thay bằng gọi `/parse-cv` thật |
+| **Payload** | Có `type` + `version` (`{ type: 'CV_PROCESSING', version: 1 }`); payload sai schema → `UnrecoverableError` → DLQ ngay, không retry vô ích |
+| **Giai đoạn** | Phase 1–2 job chỉ `GET /health` của AI Service để chứng minh đường ống; Phase 3 thay bằng gọi `/parse-cv` thật |
+| **Reprocess** | `POST /admin/candidates/:id/reprocess` đẩy lại job cùng `candidateId`/`objectKey`; jobId có timestamp nên không bị BullMQ coi là trùng |
 
 ---
 
-## 12. Ghi chú môi trường phát triển
+## 12. Slug campaign: sinh tự động & **bất biến**
+
+| | |
+|---|---|
+| **Quyết định** | `slug` sinh từ `title` (bỏ dấu tiếng Việt, `đ → d`, lowercase, gộp ký tự lạ thành `-`), unique bằng hậu tố `-2`, `-3`…; sau khi tạo **không đổi** dù `title` thay đổi |
+| **Lý do** | Slug là URL công khai đã chia sẻ cho ứng viên; đổi slug sẽ làm chết link cũ và phá SEO |
+| **Hệ quả** | `PATCH /admin/campaigns/:id` bỏ qua `slug`; nếu cần slug mới phải tạo campaign mới |
+| **Trùng lặp** | Vòng lặp thử tối đa 20 hậu tố, map `P2002` → thử tiếp; hết lượt → `409` |
+
+## 13. Rubric chỉ sửa khi vòng `PENDING`
+
+| | |
+|---|---|
+| **Quyết định** | Thêm/sửa/xoá `criteria` chỉ được phép khi round ở `PENDING` và campaign chưa `CLOSED` |
+| **Lý do** | Đổi `weight`/`maxScore` sau khi đã có phiếu điểm sẽ làm sai toàn bộ điểm đã chấm và phá tính so sánh |
+| **Điều kiện bắt đầu** | `PENDING → IN_PROGRESS` yêu cầu ≥ 1 tiêu chí và `SUM(weight) = 1.000 ± 0.001` |
+| **Chặn sớm** | Khi thêm tiêu chí, nếu tổng weight sau khi thêm > `1.001` → `409` ngay, không đợi đến lúc chuyển trạng thái |
+| **Xoá tiêu chí** | Nếu đã có `evaluation_details` tham chiếu → map `P2003/P2014` → `409` |
+
+## 14. Mã tra cứu: alphabet không gây nhầm + che tên
+
+| | |
+|---|---|
+| **Quyết định** | `APP-YYYY-XXXX`; 4 ký tự ngẫu nhiên lấy từ `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (bỏ `I`, `O`, `0`, `1`); sinh bằng `crypto.randomInt`, retry 3 lần khi trùng unique |
+| **Lý do** | Ứng viên thường đọc/ghi mã qua điện thoại hoặc giấy; `I` vs `1`, `O` vs `0` là nguồn lỗi phổ biến (ADR-04) |
+| **Độ mạnh** | 32^4 ≈ 1.05 triệu tổ hợp/năm; đủ chống enumerate nhưng **không** thay thế rate limiting (Phase 7) |
+| **Tra cứu công khai** | Chỉ trả tên đã mask (`Nguyễn Văn An` → `N***** V** A*`), `status`, `campaign`, `currentRound`; tuyệt đối không trả email/phone/điểm |
+| **Không tìm thấy** | Trả `404` thay vì `403` để không xác nhận mã có tồn tại hay không |
+
+## 15. Audit log: ghi một chiều, lỗi **không** chặn nghiệp vụ
+
+| | |
+|---|---|
+| **Quyết định** | `AuditService.record()` bọc `try/catch`; ghi thất bại chỉ `logger.error`, không ném lại |
+| **Lý do** | Trigger DB đã chặn UPDATE/DELETE trên `audit_logs`; nếu lỗi ghi audit làm rollback nghiệp vụ thì một sự cố log có thể chặn nộp hồ sơ |
+| **Đánh đổi** | Có thể mất một dòng audit khi DB lỗi tạm thời; chấp nhận vì nghiệp vụ ưu tiên hơn |
+| **Phạm vi** | `campaign.create/update/status_change/delete`, `round.create/update/status_change/lock/delete`, `criteria.create/update/delete`, `candidate.apply/reprocess` |
+
+## 16. Ghi chú môi trường phát triển
 
 | Hạng mục | Trạng thái | Ảnh hưởng |
 |---|---|---|

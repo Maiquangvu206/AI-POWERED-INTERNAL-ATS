@@ -1,20 +1,12 @@
 import { InjectQueue, OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Queue, type Job } from 'bullmq';
+import { Queue, UnrecoverableError, type Job } from 'bullmq';
 import { CV_PROCESSING_DLQ, CV_PROCESSING_QUEUE, DLQ_JOB } from './queue.constants';
+import type { CvProcessingJobData } from './queue.service';
 
 /** Phải ngắn hơn backoff để không treo worker khi AI Service chết hẳn. */
 const AI_PING_TIMEOUT_MS = 5_000;
-
-export interface CvProcessingJobData {
-  /** Có khi job đến từ luồng nộp hồ sơ thật (Phase 7). */
-  candidateId?: number;
-  /** Khoá object trong bucket `cv-files`. */
-  objectKey?: string;
-  /** Job do `/admin/queue-probe` tạo — không đụng dữ liệu ứng viên. */
-  probe?: boolean;
-}
 
 export interface CvProcessingResult {
   ok: true;
@@ -26,7 +18,7 @@ export interface CvProcessingResult {
 /**
  * Consumer của queue `cv-processing` (ADR-0005).
  *
- * Phase 1 chỉ ping AI Service để chứng minh đường ống BullMQ hoạt động:
+ * Phase 2 chỉ ping AI Service để chứng minh đường ống BullMQ hoạt động:
  * Redis → producer → worker → retry → DLQ. Phase 3 sẽ thay phần thân bằng
  * lời gọi thật tới `/parse-cv` và ghi kết quả vào `candidates`.
  */
@@ -42,11 +34,19 @@ export class CvProcessingProcessor extends WorkerHost {
   }
 
   async process(job: Job<CvProcessingJobData>): Promise<CvProcessingResult> {
+    const { type, version } = job.data;
+
+    // Payload lạ: retry không giải quyết được gì → fail ngay, vào DLQ để điều tra
+    if (type !== 'CV_PROCESSING' || typeof version !== 'number') {
+      throw new UnrecoverableError(`Payload job không hợp lệ: type=${type} version=${version}`);
+    }
+
     const aiUrl = this.config.get<string>('AI_SERVICE_URL', 'http://localhost:8010');
     const attempt = job.attemptsMade + 1;
 
     this.logger.log(
-      `Job ${job.id} — lần thử ${attempt}/${job.opts.attempts ?? 1} → GET ${aiUrl}/health`,
+      `Job ${job.id} (v${version}) — lần thử ${attempt}/${job.opts.attempts ?? 1}` +
+        ` | candidate=${job.data.candidateId ?? '-'} | GET ${aiUrl}/health`,
     );
 
     const headers: Record<string, string> = { Accept: 'application/json' };

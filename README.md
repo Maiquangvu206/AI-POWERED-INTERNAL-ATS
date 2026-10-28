@@ -13,7 +13,8 @@
 > **Trạng thái hiện tại:**
 > - ✅ **Phase 0** — monorepo 4 tầng (`frontend` / `backend` / `ai` / `shared`), tooling, 8 ADR.
 > - ✅ **Phase 1** — hạ tầng Docker (Postgres 16 · Redis 7 · RustFS · Mailpit), Prisma 9 bảng + 7 CHECK + trigger append-only, Auth/JWT/RBAC, **BullMQ retry + DLQ**, **upload CV lên object storage (magic-byte, signed URL)**.
-> - ⬜ **Phase 2** — Campaigns + Rounds (US-02) và Public Portal nhận hồ sơ (US-03).
+> - ✅ **Phase 2 (core business)** — Campaigns + Rounds + Criteria (US-02), Public Portal nhận hồ sơ & tra cứu (US-03), audit log append-only, payload job có `type`/`version` + endpoint reprocess.
+> - ⬜ **Phase 3** — AI Pipeline (parse/OCR, information extraction, hybrid matching, AI Copilot).
 >
 > README này là **nguồn sự thật duy nhất (single source of truth)** về kiến trúc, tech stack và lộ trình triển khai.
 
@@ -423,20 +424,44 @@ ALTER TABLE criteria
 
 ## 10. API Contracts
 
+### 10.1. Đã triển khai (Phase 1–2)
+
 | Method | Endpoint | Quyền | Request | Response |
 |---|---|---|---|---|
 | `POST` | `/api/v1/auth/login` | Public | `{ email, password }` | `200` + Access Token, `Set-Cookie` Refresh |
 | `POST` | `/api/v1/auth/refresh` | Cookie | — | `200` + Access Token mới (rotation) |
-| `GET` | `/api/v1/public/campaigns` | Public | `?status=OPEN` | `200` + danh sách campaign |
-| `POST` | `/api/v1/public/campaigns/:slug/apply` | Public | `multipart: full_name, email, phone, cv_file` | `201` + `{ tracking_code }` |
-| `GET` | `/api/v1/public/track/:code` | Public | — | `200` + `{ candidate, status }` |
-| `POST` | `/api/v1/campaigns` | Admin | `{ title, slug, description, start_date, end_date }` | `201` |
-| `POST` | `/api/v1/campaigns/:id/rounds` | Admin | `{ round_name, order_index, criteria[] }` | `201` |
-| `GET` | `/api/v1/rounds/:id/candidates` | Interviewer/Admin | — | `200` |
-| `POST` | `/api/v1/evaluations` | Interviewer | `{ round_id, candidate_id, scores[] }` | `201` (ACID committed) |
-| `GET` | `/api/v1/rounds/:id/scores` | Interviewer/Admin | `?candidate_id=` | `200` (áp dụng Blind filter) |
-| `POST` | `/api/v1/admin/rounds/:id/lock` | Admin | — | `200` (mở khoá toàn bộ điểm) |
-| `POST` | `/api/v1/ai/copilot/questions` | Interviewer | `{ candidate_id, round_id }` | `200` + `{ questions[] }` |
+| `GET` | `/api/v1/admin/campaigns` | Admin | `?status=&q=&page=&limit=` | `200` + `{ items, total, page, limit }` |
+| `POST` | `/api/v1/admin/campaigns` | Admin | `{ title, description?, jdText, startDate, endDate }` | `201` (slug tự sinh, mặc định `DRAFT`) |
+| `GET` | `/api/v1/admin/campaigns/:id` | Admin | — | `200` + campaign + rounds + criteria + `totalWeight` |
+| `PATCH` | `/api/v1/admin/campaigns/:id` | Admin | Partial campaign | `200` (không đổi slug; chặn khi `CLOSED`) |
+| `PATCH` | `/api/v1/admin/campaigns/:id/status` | Admin | `{ status }` | `200` (state machine) |
+| `DELETE` | `/api/v1/admin/campaigns/:id` | Admin | — | `200` (chỉ `DRAFT`, chưa có hồ sơ) |
+| `GET` | `/api/v1/admin/campaigns/:id/rounds` | Admin | — | `200` + rounds + criteria |
+| `POST` | `/api/v1/admin/campaigns/:id/rounds` | Admin | `{ roundName, orderIndex? }` | `201` |
+| `GET` | `/api/v1/admin/campaigns/:id/rounds/:roundId` | Admin | — | `200` |
+| `PATCH` | `/api/v1/admin/campaigns/:id/rounds/:roundId` | Admin | `{ roundName?, orderIndex? }` | `200` (chỉ khi `PENDING`) |
+| `PATCH` | `/api/v1/admin/campaigns/:id/rounds/:roundId/status` | Admin | `{ status }` | `200` / `409` nếu `SUM(weight) != 1` |
+| `DELETE` | `/api/v1/admin/campaigns/:id/rounds/:roundId` | Admin | — | `200` (chỉ khi `PENDING`, chưa gán ứng viên) |
+| `POST` | `/api/v1/admin/campaigns/:id/rounds/:roundId/criteria` | Admin | `{ title, maxScore, weight }` | `201` |
+| `PATCH` | `/api/v1/admin/campaigns/:id/rounds/:roundId/criteria/:criteriaId` | Admin | Partial criteria | `200` (chỉ khi round `PENDING`) |
+| `DELETE` | `/api/v1/admin/campaigns/:id/rounds/:roundId/criteria/:criteriaId` | Admin | — | `200` |
+| `GET` | `/api/v1/public/campaigns` | Public | `?status=OPEN\|CLOSED` | `200` + danh sách campaign (không bao giờ có `DRAFT`) |
+| `GET` | `/api/v1/public/campaigns/:slug` | Public | — | `200` / `404` nếu `DRAFT` |
+| `POST` | `/api/v1/public/campaigns/:slug/apply` | Public | `multipart: fullName, email, phone, cv` | `201` + `{ trackingCode, submittedAt, campaign }` |
+| `GET` | `/api/v1/public/track/:code` | Public | — | `200` + `{ trackingCode, fullName (masked), status, campaign, currentRound, submittedAt }` |
+| `POST` | `/api/v1/admin/candidates/:id/reprocess` | Admin | — | `201` + `{ candidateId, jobId, queue }` |
+| `POST` | `/api/v1/admin/queue-probe` | Admin | — | `201` + `{ jobId, queue, attempts }` |
+| `GET` | `/api/v1/admin/queue-probe` | Admin | — | `200` + counts + DLQ |
+| `GET` | `/api/v1/admin/queue-probe/:id` | Admin | — | `200` + trạng thái job |
+
+### 10.2. Dự kiến (Phase 3+)
+
+| Method | Endpoint | Quyền | Mô tả |
+|---|---|---|---|
+| `GET` | `/api/v1/rounds/:id/candidates` | Interviewer/Admin | Ứng viên trong vòng |
+| `POST` | `/api/v1/evaluations` | Interviewer | `{ roundId, candidateId, scores[] }` — transaction ACID |
+| `GET` | `/api/v1/rounds/:id/scores` | Interviewer/Admin | Áp dụng Blind filter ở tầng DB |
+| `POST` | `/api/v1/ai/copilot/questions` | Interviewer | `{ candidateId, roundId }` → câu hỏi gợi ý |
 
 Quy ước chung: prefix `/api/v1`, JSON envelope `{ data, meta?, error? }`, lỗi theo RFC 7807 (`application/problem+json`), phân trang `?page=&limit=`.
 
@@ -455,7 +480,18 @@ Quy ước chung: prefix `/api/v1`, JSON envelope `{ data, meta?, error? }`, l�
 - [x] BullMQ producer/consumer + DLQ
 - [x] Upload CV qua server-side stream + magic-byte + signed URL (ADR-06)
 
-### Phase 2 — AI Pipeline (Tuần 3–4)
+### Phase 2 — Nghiệp vụ lõi: Campaign · Round · Public Portal ✅
+
+- [x] Campaign CRUD, slug tự sinh (bỏ dấu tiếng Việt, unique, bất biến) + state machine `DRAFT → OPEN → CLOSED`
+- [x] Round + Criteria: `order_index` tự tăng, rubric chỉ sửa khi `PENDING`, `SUM(weight) = 1.000 ± 0.001`
+- [x] Round state machine `PENDING → IN_PROGRESS → LOCKED`, ghi `locked_at`/`locked_by`
+- [x] Public Portal API: nộp hồ sơ (magic-byte PDF, 5 MB) + tra cứu bằng mã `APP-YYYY-XXXX`
+- [x] `tracking_code` sinh ngẫu nhiên (bỏ ký tự dễ nhầm I/O/0/1), retry 3 lần khi trùng
+- [x] Tra cứu công khai chỉ trả tên đã che + trạng thái, không lộ email/phone/điểm
+- [x] Audit log append-only cho mọi mutation + payload job có `type`/`version`
+- [x] Bù trừ file mồ côi khi ghi DB thất bại; endpoint reprocess job cho Admin
+
+### Phase 3 — AI Pipeline (Tuần 3–4)
 
 - [ ] PDF text extraction + **OCR fallback** khi text < 50 từ
 - [ ] Chuẩn hoá text: bỏ header/footer, gộp dòng, xử lý layout 2 cột
@@ -465,7 +501,7 @@ Quy ước chung: prefix `/api/v1`, JSON envelope `{ data, meta?, error? }`, l�
 - [ ] US-08 AI Copilot: prompt template sinh câu hỏi từ skill gap
 - [ ] Unit test cho scoring engine với bộ CV/JD mẫu
 
-### Phase 3 — UI/UX & Governance (Tuần 5)
+### Phase 4 — Đánh giá, Blind Scoring & UI (Tuần 5)
 
 - [ ] Public Portal: form nộp CV (drag & drop), trang tra cứu trạng thái
 - [ ] Interviewer Portal: rubric card, blind score, panel AI Copilot
@@ -474,7 +510,7 @@ Quy ước chung: prefix `/api/v1`, JSON envelope `{ data, meta?, error? }`, l�
 - [ ] Rate limiting + CAPTCHA cho endpoint public
 - [ ] Cảnh báo chênh lệch điểm (outlier detection) khi chênh > 3 điểm
 
-### Phase 4 — DevOps & Showcase (Tuần 6)
+### Phase 5 — DevOps & Showcase (Tuần 6)
 
 - [ ] `docker compose up` dựng toàn bộ hệ sinh thái bằng một lệnh
 - [ ] GitHub Actions: lint → test → build → image push

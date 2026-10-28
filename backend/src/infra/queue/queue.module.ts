@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import { CV_PROCESSING_DLQ, CV_PROCESSING_QUEUE } from './queue.constants';
+import { QueueService } from './queue.service';
 import { CvProcessingProcessor } from './cv-processing.processor';
 
 interface RedisConnection {
@@ -59,7 +60,7 @@ export function buildRedisConnection(redisUrl: string): RedisConnection {
       },
     }),
   ],
-  providers: [CvProcessingProcessor],
-  exports: [BullModule],
+  providers: [CvProcessingProcessor, QueueService],
+  exports: [BullModule, QueueService],
 })
 export class QueueModule {}
