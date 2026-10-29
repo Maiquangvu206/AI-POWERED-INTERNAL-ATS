@@ -36,6 +36,8 @@ export const envSchema = z.object({
     .url('AI_SERVICE_URL phải là URL hợp lệ')
     .default('http://localhost:8010'),
   AI_INTERNAL_TOKEN: z.string().default(''),
+  /** Analyze gồm OCR nên cho phép dài hơn; worker dùng AbortSignal timeout. */
+  AI_ANALYZE_TIMEOUT_MS: z.coerce.number().int().min(5_000).max(600_000).default(120_000),
 
   // --- Object storage S3-compatible (ADR-0006) -------------------------------
   S3_ENDPOINT: z.string().url('S3_ENDPOINT phải là URL hợp lệ'),

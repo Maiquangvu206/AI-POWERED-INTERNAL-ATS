@@ -15,8 +15,12 @@ dependencies = [
 #   pip install -e ".[ai]"
 ai = [
   "pdfplumber>=0.11.0",
+  "pdf2image>=1.17.0",
+  "pytesseract>=0.3.13",
+  "pillow>=11.0.0",
   "sentence-transformers>=3.3.0",
   "openai>=1.57.0",
+  "httpx>=0.28.0",
 ]
 dev = [
   "pytest>=8.3.0",
@@ -31,6 +35,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["data/*.json"]
 
 [tool.ruff]
 line-length = 100

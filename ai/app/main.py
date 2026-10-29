@@ -1,15 +1,16 @@
 """Entrypoint của AI Service.
 
-Phase 0 chỉ có /health.
-Phase 3 sẽ thêm:
-  POST /internal/v1/ai/analyze    — bóc tách + matching
-  POST /internal/v1/ai/copilot    — sinh câu hỏi phỏng vấn
+Phase 3:
+  POST /internal/v1/ai/analyze    — bóc tách + matching (X-Internal-Token)
+  GET  /health                    — liveness + trạng thái model
+Phase 5 sẽ thêm `/internal/v1/ai/copilot`.
 """
-
-from datetime import UTC, datetime
 
 from fastapi import FastAPI
 
+from app.routers import analyze, health, copilot
+from app.services.embedder import Embedder
+from app.services.llm_client import LlmClient
 from app.settings import get_settings
 
 settings = get_settings()
@@ -20,14 +21,10 @@ app = FastAPI(
     description="Microservice AI cho hệ thống AI-Powered Internal ATS",
 )
 
+# Singleton gắn vào app: model/embedding chỉ load 1 lần cho cả process
+app.state.llm = LlmClient(settings)
+app.state.embedder = Embedder(settings)
 
-@app.get("/health", tags=["system"])
-def health() -> dict[str, object]:
-    """Liveness probe."""
-    return {
-        "status": "ok",
-        "service": "ai-service",
-        "version": settings.app_version,
-        "timestamp": datetime.now(tz=UTC).isoformat(),
-        "model_loaded": False,  # True từ Phase 3 khi đã load embedding model
-    }
+app.include_router(health.router)
+app.include_router(analyze.router)
+app.include_router(copilot.router)

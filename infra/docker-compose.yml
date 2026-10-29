@@ -4,11 +4,11 @@
 #
 # Cổng trên máy host được chọn để KHÔNG đụng dịch vụ đang chạy sẵn:
 #   5433 -> 5432  (máy dev đã có PostgreSQL local ở 5432)
-#   6379 -> 6379  Redis
-#   9000 -> 9000  MinIO S3 API
-#   9001 -> 9001  MinIO Console
-#   1025 -> 1025  SMTP (Mailpit)
-#   8025 -> 8025  Web UI đọc mail
+#   6380 -> 6379  Redis
+#   9002 -> 9000  MinIO S3 API
+#   9003 -> 9001  MinIO Console
+#   1026 -> 1025  SMTP (Mailpit)
+#   8026 -> 8025  Web UI đọc mail
 # =============================================================================
 
 name: ats
