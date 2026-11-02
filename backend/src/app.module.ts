@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { validateEnv } from './config/env.validation';
+import { CaptchaModule } from './infra/captcha/captcha.module';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { QueueModule } from './infra/queue/queue.module';
 import { StorageModule } from './infra/storage/storage.module';
@@ -29,6 +31,8 @@ import { HealthModule } from './modules/health/health.module';
       cache: true,
     }),
     PrismaModule,
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
+    CaptchaModule,
     QueueModule,
     StorageModule,
     AuditModule,
@@ -41,6 +45,8 @@ import { HealthModule } from './modules/health/health.module';
     CopilotModule,
   ],
   providers: [
+    // Chặn spam trước khi chạm DB; JWT/RBAC sau đó
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     // Thứ tự quan trọng: xác thực trước, phân quyền sau
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },

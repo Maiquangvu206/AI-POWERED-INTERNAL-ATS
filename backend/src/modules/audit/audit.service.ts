@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import type { ListAuditLogsQueryDto } from './dto/list-audit-logs.dto';
 
 export interface AuditEntry {
   actorId?: number | null;
@@ -28,6 +29,36 @@ export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
   constructor(private readonly prisma: PrismaService) {}
+
+  /** Phân trang audit log — chỉ đọc, không có endpoint sửa/xoá (append-only). */
+  async list(query: ListAuditLogsQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const where: Prisma.AuditLogWhereInput = {
+      ...(query.entityType ? { entityType: query.entityType } : {}),
+      ...(query.action ? { action: query.action } : {}),
+      ...(query.actorId ? { actorId: query.actorId } : {}),
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.auditLog.findMany({
+        where,
+        orderBy: { id: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { actor: { select: { id: true, fullName: true, email: true } } },
+      }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+
+    return {
+      items: items.map((item) => ({ ...item, id: String(item.id) })),
+      total,
+      page,
+      limit,
+    };
+  }
 
   async record(entry: AuditEntry): Promise<void> {
     try {

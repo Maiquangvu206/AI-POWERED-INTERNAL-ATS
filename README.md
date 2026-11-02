@@ -15,9 +15,10 @@
 > - ✅ **Phase 1** — hạ tầng Docker (Postgres 16 · Redis 7 · RustFS · Mailpit), Prisma 9 bảng + 7 CHECK + trigger append-only, Auth/JWT/RBAC, **BullMQ retry + DLQ**, **upload CV lên object storage (magic-byte, signed URL)**.
 > - ✅ **Phase 2 (core business)** — Campaigns + Rounds + Criteria (US-02), Public Portal nhận hồ sơ & tra cứu (US-03), audit log append-only, payload job có `type`/`version` + endpoint reprocess.
 > - ✅ **Phase 3** — AI Pipeline (parse/OCR, information extraction, hybrid matching, AI Copilot).
-> - 🚧 **Phase 4** — Evaluation API + Blind Scoring (US-05/06), lock/unblind, outlier detection, Interviewer Portal & Admin scoreboard. Còn lại: rate limit/CAPTCHA, audit viewer, biểu đồ.
+> - ✅ **Phase 4** — Evaluation API + Blind Scoring (US-05/06), lock/unblind, outlier detection, Interviewer Portal, Admin ranking + biểu đồ, audit viewer, rate limit + CAPTCHA (Turnstile).
+> - ⬜ **Phase 5** — DevOps, OpenAPI, seed demo, walkthrough.
 >
-> **Ghi chú UI (Phase 4/6):** màn hình xem trước CV + bảng metadata kiểu “document preview” (PDF viewer + metadata panel) sẽ dùng `react-pdf`/`pdf.js` + component bảng của `shadcn/ui`, hiển thị signed URL từ object storage và dữ liệu `ai_parsed_skills` / `ai_match_breakdown`.
+> **Ghi chú UI:** màn hình xem trước CV + bảng metadata kiểu “document preview” (PDF viewer + metadata panel) sẽ dùng `react-pdf`/`pdf.js` + component bảng của `shadcn/ui`, hiển thị signed URL từ object storage và dữ liệu `ai_parsed_skills` / `ai_match_breakdown` — dự kiến ở Phase 6.
 >
 > README này là **nguồn sự thật duy nhất (single source of truth)** về kiến trúc, tech stack và lộ trình triển khai.
 
@@ -470,6 +471,10 @@ ALTER TABLE criteria
 | `GET` | `/api/v1/rounds/:id/scores` | Interviewer/Admin | Blind filter ở tầng SQL; Admin thấy toàn bộ |
 | `PATCH` | `/api/v1/admin/candidates/:id/round` | Admin | Gán ứng viên vào vòng `IN_PROGRESS` + audit |
 | `POST` | `/api/v1/admin/rounds/:id/lock` | Admin | Khoá vòng → unblind + audit `round.lock` |
+| `GET` | `/api/v1/admin/campaigns/:id/candidates` | Admin | Xếp hạng theo `ai_match_score` + phân bố điểm |
+| `GET` | `/api/v1/admin/audit-logs` | Admin | Tra cứu audit log (lọc entity/action/actor, phân trang) |
+
+**Chống spam public:** rate limit 5 lượt nộp/phút, 30 lượt tra cứu/phút theo IP; CAPTCHA Cloudflare Turnstile bật khi có `TURNSTILE_SECRET_KEY`.
 
 Quy ước chung: prefix `/api/v1`, JSON envelope `{ data, meta?, error? }`, lỗi theo RFC 7807 (`application/problem+json`), phân trang `?page=&limit=`.
 
@@ -509,7 +514,7 @@ Quy ước chung: prefix `/api/v1`, JSON envelope `{ data, meta?, error? }`, l�
 - [x] US-08 AI Copilot: prompt template sinh câu hỏi từ skill gap
 - [ ] Unit test cho scoring engine với bộ CV/JD mẫu
 
-### Phase 4 — Đánh giá, Blind Scoring & UI (Tuần 5) 🚧
+### Phase 4 — Đánh giá, Blind Scoring & UI (Tuần 5) ✅
 
 - [x] Backend Evaluation API (US-05): transaction ACID, validate đủ rubric, chặn double-submit 409
 - [x] Blind Scoring (US-06) lọc ở tầng SQL + ẩn danh tính giám khảo
@@ -517,10 +522,12 @@ Quy ước chung: prefix `/api/v1`, JSON envelope `{ data, meta?, error? }`, l�
 - [x] Outlier detection khi lệch > 3 điểm
 - [x] Interviewer Portal: rubric card + blind score + panel AI Copilot
 - [x] Admin scoreboard: tổng hợp điểm, cảnh báo lệch, nút Lock Round
-- [ ] Public Portal: form nộp CV (drag & drop) gọi API thật, trang tra cứu trạng thái
-- [ ] Admin Dashboard: bảng xếp hạng theo `ai_match_score`, biểu đồ phân bổ điểm
-- [ ] `audit_logs` + màn hình tra cứu lịch sử thao tác
-- [ ] Rate limiting + CAPTCHA cho endpoint public
+- [x] Public Portal: form nộp CV (drag & drop) gọi API thật, trang tra cứu trạng thái
+- [x] Admin Dashboard: bảng xếp hạng theo `ai_match_score`, biểu đồ phân bổ điểm
+- [x] `audit_logs` + màn hình tra cứu lịch sử thao tác
+- [x] Rate limiting + CAPTCHA cho endpoint public
+- [x] Smoke test bảo mật blind (`npm run smoke:blind -w @ats/backend`)
+- [ ] Màn hình xem trước CV (PDF viewer + metadata panel) — chuyển sang Phase 6
 
 ### Phase 5 — DevOps & Showcase (Tuần 6)
 
@@ -627,7 +634,10 @@ npm run dev:ai     # ai-service :8010 (cần activate venv trước)
 |---|---|
 | http://localhost:3000/api/v1/health | `{"status":"ok","service":"core-api",...}` |
 | http://localhost:3000/api/docs | Swagger UI của Core API |
-| http://localhost:5173 | Trang chủ, hiển thị "✓ core-api v0.1.0 — ok" |
+| http://localhost:5173 | Public Portal: danh sách chiến dịch đang mở, nộp CV, tra cứu |
+| http://localhost:5173/login | Đăng nhập nội bộ (demo `admin@demo.com` / `Admin@123`) |
+| http://localhost:5173/admin | Admin Dashboard: xếp hạng, biểu đồ, audit log |
+| http://localhost:5173/interviewer/rounds/1 | Interviewer Portal: rubric + blind score + AI Copilot |
 | http://localhost:8010/health | `{"status":"ok","service":"ai-service",...}` |
 | http://localhost:8010/docs | Swagger UI của AI Service |
 | http://localhost:9001 | RustFS Console (`minioadmin` / `minioadmin`) |

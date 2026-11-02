@@ -273,3 +273,128 @@ button:disabled {
   padding-left: 18px;
   font-size: 0.9rem;
 }
+
+/* ---------------------------------------------------------------------------
+ * Phase 4 — Public portal & Admin dashboard
+ * ------------------------------------------------------------------------- */
+
+a {
+  color: var(--accent);
+}
+
+.apply-form .field,
+.field {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--muted);
+  cursor: pointer;
+  margin-bottom: 16px;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.dropzone.dragging {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.inline-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.inline-form input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.kv dt {
+  color: var(--muted);
+}
+
+.kv dd {
+  margin: 0;
+}
+
+.home-actions {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.stat {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 0;
+}
+
+.stat strong {
+  font-size: 1.5rem;
+}
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  height: 180px;
+  padding-top: 8px;
+}
+
+.chart-column {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+}
+
+.chart-bar {
+  width: 100%;
+  max-width: 64px;
+  min-height: 2px;
+  background: linear-gradient(180deg, var(--accent), #2563eb);
+  border-radius: 6px 6px 0 0;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.button-link {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  text-decoration: none;
+}

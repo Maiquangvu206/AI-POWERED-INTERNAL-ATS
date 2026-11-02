@@ -10,6 +10,7 @@ import { CampaignStatus } from '@prisma/client';
 import { ApplyFormSchema } from '@ats/shared';
 import type { ClientMeta } from '../../common/decorators/client-meta.decorator';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { CaptchaService } from '../../infra/captcha/captcha.service';
 import { QueueService } from '../../infra/queue/queue.service';
 import { StorageService } from '../../infra/storage/storage.service';
 import { inspectCvFile } from '../../infra/storage/cv-file.validation';
@@ -33,6 +34,7 @@ export class CandidatesService {
     private readonly storage: StorageService,
     private readonly queue: QueueService,
     private readonly audit: AuditService,
+    private readonly captcha: CaptchaService,
   ) {}
 
   /**
@@ -67,6 +69,8 @@ export class CandidatesService {
     if (today < campaign.startDate || today > campaign.endDate) {
       throw new ConflictException('Chiến dịch đang ngoài thời gian nhận hồ sơ');
     }
+
+    await this.captcha.verify((body as { turnstileToken?: unknown }).turnstileToken, meta?.ip);
 
     const parsed = ApplyFormSchema.safeParse(body);
     if (!parsed.success) {
@@ -167,6 +171,76 @@ export class CandidatesService {
       campaign: candidate.campaign,
       currentRound: candidate.currentRound,
       submittedAt: candidate.createdAt.toISOString(),
+    };
+  }
+
+  /**
+   * Bảng xếp hạng ứng viên theo `ai_match_score` + phân bố điểm cho biểu đồ.
+   * Ứng viên chưa chấm AI (`ai_match_score = NULL`) xếp cuối.
+   */
+  async ranking(campaignId: number) {
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { id: true, title: true, status: true },
+    });
+    if (!campaign) throw new NotFoundException(`Không tìm thấy chiến dịch #${campaignId}`);
+
+    const candidates = await this.prisma.candidate.findMany({
+      where: { campaignId },
+      orderBy: [{ aiMatchScore: { sort: 'desc', nulls: 'last' } }, { id: 'asc' }],
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        trackingCode: true,
+        aiMatchScore: true,
+        aiParsedSkills: true,
+        aiError: true,
+        aiProcessedAt: true,
+        finalStatus: true,
+        createdAt: true,
+        currentRound: { select: { id: true, roundName: true, status: true } },
+      },
+    });
+
+    const items = candidates.map((candidate) => ({
+      ...candidate,
+      aiMatchScore: candidate.aiMatchScore === null ? null : Number(candidate.aiMatchScore),
+    }));
+
+    // Biểu đồ phân bố: 5 khoảng 20 điểm, tính cả hồ sơ chưa chấm AI
+    const buckets = Array.from({ length: 5 }, (_, index) => ({
+      from: index * 20,
+      to: index * 20 + 20,
+      count: 0,
+    }));
+    let pending = 0;
+    for (const item of items) {
+      if (item.aiMatchScore === null) {
+        pending += 1;
+        continue;
+      }
+      const index = Math.min(Math.floor(item.aiMatchScore / 20), 4);
+      buckets[index].count += 1;
+    }
+
+    return {
+      campaign,
+      items,
+      distribution: buckets,
+      stats: {
+        total: items.length,
+        pending,
+        processed: items.length - pending,
+        average:
+          items.filter((item) => item.aiMatchScore !== null).length > 0
+            ? Math.round(
+                (items.reduce((sum, item) => sum + (item.aiMatchScore ?? 0), 0) /
+                  (items.length - pending)) *
+                  100,
+              ) / 100
+            : null,
+      },
     };
   }
 

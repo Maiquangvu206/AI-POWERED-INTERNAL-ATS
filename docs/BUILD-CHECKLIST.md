@@ -259,9 +259,9 @@
   - Interviewer → `WHERE interviewer_id = :me`
   - Admin → toàn bộ
 - [x] Không trả `interviewer_id`/`interviewer_name` cho Interviewer
-- [ ] Test bảo mật: interviewer A gọi API với `candidate_id` của interviewer B → **không** thấy dữ liệu
-- [ ] Test: gọi trực tiếp bằng `curl` (bypass UI) vẫn bị lọc
-- [ ] Xác nhận response KHÔNG chứa `total_score` của người khác
+- [x] Test bảo mật: interviewer A gọi API với `candidate_id` của interviewer B → **không** thấy dữ liệu
+- [x] Test: gọi trực tiếp bằng `curl` (bypass UI) vẫn bị lọc — `npm run smoke:blind -w @ats/backend`
+- [x] Xác nhận response KHÔNG chứa `total_score` của người khác
 
 ### 4.4. Lock Round & Unblind
 

@@ -1,0 +1,17 @@
+# Build context của backend/frontend là repo root → chặn node_modules/dist/.venv
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/*.egg-info
+.git
+infra
+docs
+storage
+*.log
+.env
+.env.*
+!.env.example

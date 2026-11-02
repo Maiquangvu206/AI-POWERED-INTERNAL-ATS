@@ -1,4 +1,4 @@
-import { Controller, Param, ParseIntPipe, Post } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@ats/shared';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -21,5 +21,21 @@ export class AdminCandidatesController {
     @ClientMeta() meta: ClientMeta,
   ) {
     return this.candidates.reprocess(id, actorId, meta);
+  }
+}
+
+@ApiTags('admin/candidates')
+@ApiBearerAuth()
+@Roles(Role.ADMIN)
+@Controller('admin')
+export class AdminCandidateRankingController {
+  constructor(private readonly candidates: CandidatesService) {}
+
+  @Get('campaigns/:campaignId/candidates')
+  @ApiOperation({
+    summary: 'Bảng xếp hạng theo ai_match_score + phân bố điểm (biểu đồ)',
+  })
+  ranking(@Param('campaignId', ParseIntPipe) campaignId: number) {
+    return this.candidates.ranking(campaignId);
   }
 }

@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { memoryStorage } from 'multer';
 import { CV_UPLOAD_LIMITS } from '@ats/shared';
@@ -14,6 +15,7 @@ export class PublicApplicationsController {
 
   @Public()
   @Post('campaigns/:slug/apply')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @UseInterceptors(
     FileInterceptor('cv', {
       storage: memoryStorage(),
@@ -49,6 +51,7 @@ export class PublicApplicationsController {
 
   @Public()
   @Get('track/:code')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: 'Tra cứu trạng thái hồ sơ bằng mã APP-YYYY-XXXX' })
   track(@Param('code') code: string) {
     return this.candidates.track(code);

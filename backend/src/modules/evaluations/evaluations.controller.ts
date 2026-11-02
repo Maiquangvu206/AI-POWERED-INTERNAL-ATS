@@ -43,10 +43,9 @@ export class EvaluationsController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateEvaluationDto,
     @CurrentUser('userId') userId: number,
-    @CurrentUser('role') role: Role,
     @ClientMeta() meta: ClientMeta,
   ) {
-    return this.evaluations.update(id, dto, userId, role, meta);
+    return this.evaluations.update(id, dto, userId, meta);
   }
 
   @Get('rounds/:roundId/scores')

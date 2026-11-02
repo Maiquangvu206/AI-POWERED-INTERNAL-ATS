@@ -16,7 +16,8 @@
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force",
-    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "smoke:blind": "node scripts/blind-scoring-smoke.mjs"
   },
   "dependencies": {
     "@ats/shared": "*",
@@ -30,6 +31,7 @@
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.4.15",
     "@nestjs/swagger": "^8.1.0",
+    "@nestjs/throttler": "^6.7.1",
     "@prisma/client": "^6.1.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.34.0",

@@ -49,6 +49,10 @@ export const envSchema = z.object({
   S3_SIGNED_URL_TTL: z.coerce.number().int().min(30).max(3600).default(300),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('debug'),
+
+  // --- Chống spam public (Phase 4) --------------------------------------------
+  /** Để trống = tắt CAPTCHA (dev/test); đặt secret Cloudflare Turnstile ở production. */
+  TURNSTILE_SECRET_KEY: z.string().default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;

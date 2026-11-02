@@ -144,20 +144,14 @@ export class EvaluationsService {
   }
 
   /** Sửa phiếu của chính mình khi vòng còn IN_PROGRESS (trước khi unblind). */
-  async update(
-    evaluationId: number,
-    dto: UpdateEvaluationDto,
-    userId: number,
-    role: Role,
-    meta?: ClientMeta,
-  ) {
+  async update(evaluationId: number, dto: UpdateEvaluationDto, userId: number, meta?: ClientMeta) {
     const current = await this.prisma.evaluation.findUnique({
       where: { id: evaluationId },
       include: { round: { include: { criteria: true } } },
     });
 
     if (!current) throw new NotFoundException(`Không tìm thấy phiếu #${evaluationId}`);
-    if (role !== Role.ADMIN && current.interviewerId !== userId) {
+    if (current.interviewerId !== userId) {
       throw new ForbiddenException('Bạn chỉ được sửa phiếu của chính mình');
     }
     this.assertOpenForScoring(current.round);
@@ -367,7 +361,7 @@ export class EvaluationsService {
 
   private assertOpenForScoring(round: { status: RoundStatus; campaignId: number }): void {
     if (round.status !== RoundStatus.IN_PROGRESS) {
-      throw new ConflictException(
+      throw new BadRequestException(
         `Vòng đang ở trạng thái ${round.status} — chỉ chấm điểm khi IN_PROGRESS`,
       );
     }
