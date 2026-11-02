@@ -187,46 +187,46 @@
 
 ### 3.1. Khung FastAPI
 
-- [ ] `app/main.py` + `settings.py` (Pydantic Settings)
-- [ ] `/health` trả `{ status, model_loaded, version }`
-- [ ] API key nội bộ (`X-Internal-Token`) cho mọi endpoint `/internal/*`
-- [ ] Structured logging + request-id đồng bộ với Core API
+- [x] `app/main.py` + `settings.py` (Pydantic Settings)
+- [x] `/health` trả `{ status, model_loaded, version }`
+- [x] API key nội bộ (`X-Internal-Token`) cho mọi endpoint `/internal/*`
+- [x] Structured logging + request-id đồng bộ với Core API
 - [ ] Dockerfile riêng, image ≤ 1.5GB (dùng `python:3.12-slim`, pre-download model ở build stage)
 
 ### 3.2. Trích xuất CV
 
-- [ ] `pdfplumber` extract text theo từng trang
-- [ ] **OCR fallback** khi text < 50 từ: `pdf2image` + `pytesseract` (`vie+eng`)
-- [ ] Xử lý layout 2 cột: extract theo `x0` để gộp đúng thứ tự
-- [ ] Chuẩn hoá: gộp dòng bị ngắt, bỏ header/footer lặp, chuẩn hoá Unicode tiếng Việt (NFC)
-- [ ] Cắt section: `summary`, `experience`, `education`, `skills`, `projects`
-- [ ] Trả về `raw_text` + `sections` + `page_count` + `extraction_method` (`text` | `ocr`)
+- [x] `pdfplumber` extract text theo từng trang
+- [x] **OCR fallback** khi text < 50 từ: `pdf2image` + `pytesseract` (`vie+eng`)
+- [x] Xử lý layout 2 cột: extract theo `x0` để gộp đúng thứ tự
+- [x] Chuẩn hoá: gộp dòng bị ngắt, bỏ header/footer lặp, chuẩn hoá Unicode tiếng Việt (NFC)
+- [x] Cắt section: `summary`, `experience`, `education`, `skills`, `projects`
+- [x] Trả về `raw_text` + `sections` + `page_count` + `extraction_method` (`text` | `ocr`)
 - [ ] Test với 10 CV mẫu: 5 text-based, 3 scan, 2 Canva 2 cột
 
 ### 3.3. Information Extraction
 
-- [ ] Định nghĩa `CandidateProfile` bằng Pydantic: `skills[]`, `total_years_experience`, `roles[]`, `education_level`, `languages[]`
-- [ ] Dùng LLM **structured output (JSON mode)** hoặc NER để điền schema
-- [ ] Skill normalization: map synonym (`JS` → `JavaScript`, `Postgres` → `PostgreSQL`) qua `skills-dictionary.json`
-- [ ] Validate output bằng Pydantic — nếu fail thì retry 1 lần rồi fallback heuristic (regex)
-- [ ] **Mask PII trước khi gửi LLM** (tên, SĐT, email, địa chỉ, CCCD)
+- [x] Định nghĩa `CandidateProfile` bằng Pydantic: `skills[]`, `total_years_experience`, `roles[]`, `education_level`, `languages[]`
+- [x] Dùng LLM **structured output (JSON mode)** hoặc NER để điền schema
+- [x] Skill normalization: map synonym (`JS` → `JavaScript`, `Postgres` → `PostgreSQL`) qua `skills-dictionary.json`
+- [x] Validate output bằng Pydantic — nếu fail thì retry 1 lần rồi fallback heuristic (regex)
+- [x] **Mask PII trước khi gửi LLM** (tên, SĐT, email, địa chỉ, CCCD)
 
 ### 3.4. Hybrid Matching Engine
 
-- [ ] **Hard match (40%)**: Jaccard giữa `required_skills` (từ JD) và `candidate.skills`
-- [ ] **Semantic match (40%)**: cosine similarity `bge-m3` giữa section `experience` và JD (chunk 512 token, lấy max/mean)
-- [ ] **Tiêu chí phụ (20%)**: years of experience (bucket hoá), education level (thang bậc)
+- [x] **Hard match (40%)**: Jaccard giữa `required_skills` (từ JD) và `candidate.skills`
+- [x] **Semantic match (40%)**: cosine similarity `bge-m3` giữa section `experience` và JD (chunk 512 token, lấy max/mean)
+- [x] **Tiêu chí phụ (20%)**: years of experience (bucket hoá), education level (thang bậc)
 - [ ] Công thức ghi rõ trong docstring + unit test từng thành phần
-- [ ] Trả output **giải thích được**: `{ score, matched_skills[], missing_skills[], breakdown: {hard, semantic, extra}, reasoning }`
-- [ ] Lưu `breakdown` vào `candidates.ai_match_breakdown` (jsonb) để UI hiển thị
+- [x] Trả output **giải thích được**: `{ score, matched_skills[], missing_skills[], breakdown: {hard, semantic, extra}, reasoning }`
+- [x] Lưu `breakdown` vào `candidates.ai_match_breakdown` (jsonb) để UI hiển thị
 - [ ] Latency mục tiêu: **< 8s/CV** (không tính OCR)
 
 ### 3.5. Tích hợp vào queue
 
-- [ ] Worker trong Core API (hoặc worker Python riêng) consume `CV_PROCESSING`
-- [ ] Gọi `POST /internal/v1/ai/analyze` với `{ cv_url, jd_text, required_skills }`
-- [ ] Ghi `ai_match_score`, `ai_parsed_skills`, `ai_match_breakdown`, `ai_processed_at`
-- [ ] Lỗi → `ai_error` + đẩy vào DLQ, **không** làm hỏng record candidate
+- [x] Worker trong Core API (hoặc worker Python riêng) consume `CV_PROCESSING`
+- [x] Gọi `POST /internal/v1/ai/analyze` với `{ cv_url, jd_text, required_skills }`
+- [x] Ghi `ai_match_score`, `ai_parsed_skills`, `ai_match_breakdown`, `ai_processed_at`
+- [x] Lỗi → `ai_error` + đẩy vào DLQ, **không** làm hỏng record candidate
 - [ ] Metric: `ai_processing_duration_seconds`, `ai_jobs_failed_total`
 
 **DoD Phase 3:** Nộp 10 CV → 10 record có điểm trong < 2 phút; ít nhất 1 CV scan được OCR thành công; xem được breakdown điểm trên Prisma Studio.
@@ -237,41 +237,41 @@
 
 ### 4.1. Gán ứng viên vào vòng
 
-- [ ] Admin chuyển ứng viên sang round tiếp theo (`candidates.current_round_id`)
-- [ ] Round phải ở `IN_PROGRESS` mới nhận ứng viên
-- [ ] Ghi `audit_logs` cho mỗi lần chuyển vòng
+- [x] Admin chuyển ứng viên sang round tiếp theo (`candidates.current_round_id`)
+- [x] Round phải ở `IN_PROGRESS` mới nhận ứng viên
+- [x] Ghi `audit_logs` cho mỗi lần chuyển vòng
 
 ### 4.2. Nộp phiếu điểm (US-05)
 
-- [ ] `POST /evaluations` với `{ round_id, candidate_id, scores: [{criterion_id, score, comment}] }`
-- [ ] Guard: round `IN_PROGRESS`, candidate thuộc round, criterion thuộc round
-- [ ] Validate `0 ≤ score ≤ max_score` cho từng criterion
-- [ ] Validate **đủ tất cả criterion** của round (không cho nộp thiếu)
-- [ ] `INTERACTIVE TRANSACTION` (Prisma `$transaction`): insert `evaluations` + N `evaluation_details`
-- [ ] `total_score` = tổng `score × weight` — tính trong transaction
-- [ ] UNIQUE constraint chặn double-submit → map lỗi Prisma `P2002` thành **409 Conflict** thân thiện
-- [ ] Cho phép **sửa** phiếu khi round còn `IN_PROGRESS` (upsert), ghi audit log `evaluation.update`
-- [ ] Trả `400` với message rõ ràng nếu round `LOCKED`
+- [x] `POST /evaluations` với `{ round_id, candidate_id, scores: [{criterion_id, score, comment}] }`
+- [x] Guard: round `IN_PROGRESS`, candidate thuộc round, criterion thuộc round
+- [x] Validate `0 ≤ score ≤ max_score` cho từng criterion
+- [x] Validate **đủ tất cả criterion** của round (không cho nộp thiếu)
+- [x] `INTERACTIVE TRANSACTION` (Prisma `$transaction`): insert `evaluations` + N `evaluation_details`
+- [x] `total_score` = tổng `score × weight` — tính trong transaction
+- [x] UNIQUE constraint chặn double-submit → map lỗi Prisma `P2002` thành **409 Conflict** thân thiện
+- [x] Cho phép **sửa** phiếu khi round còn `IN_PROGRESS` (upsert), ghi audit log `evaluation.update`
+- [x] Trả `400` với message rõ ràng nếu round `LOCKED`
 
 ### 4.3. Blind Scoring (US-06)
 
-- [ ] `GET /rounds/:id/scores?candidate_id=`:
+- [x] `GET /rounds/:id/scores`:
   - Interviewer → `WHERE interviewer_id = :me`
   - Admin → toàn bộ
-- [ ] Không trả `interviewer_id`/`interviewer_name` cho Interviewer
+- [x] Không trả `interviewer_id`/`interviewer_name` cho Interviewer
 - [ ] Test bảo mật: interviewer A gọi API với `candidate_id` của interviewer B → **không** thấy dữ liệu
 - [ ] Test: gọi trực tiếp bằng `curl` (bypass UI) vẫn bị lọc
 - [ ] Xác nhận response KHÔNG chứa `total_score` của người khác
 
 ### 4.4. Lock Round & Unblind
 
-- [ ] `POST /admin/rounds/:id/lock` chỉ Admin
-- [ ] Chỉ lock được khi round `IN_PROGRESS`
-- [ ] Sau lock: mọi `POST /evaluations` trả `400`
-- [ ] Tính điểm tổng hợp: trung bình có trọng số của tất cả giám khảo
-- [ ] **Outlier detection**: nếu độ lệch chuẩn > 2.0 hoặc max-min > 3.0 → gắn cờ `discrepancy_warning`
-- [ ] Audit log `round.lock` kèm `actor_id`, `timestamp`, `ip`
-- [ ] Mở unblind: Admin xem được toàn bộ bảng điểm sau lock
+- [x] `POST /admin/rounds/:id/lock` chỉ Admin
+- [x] Chỉ lock được khi round `IN_PROGRESS`
+- [x] Sau lock: mọi `POST /evaluations` trả `400`
+- [x] Tính điểm tổng hợp: trung bình có trọng số của tất cả giám khảo
+- [ ] **Outlier detection**: nếu độ lệch chuẩn > 2.0 hoặc max-min > 3.0 → gắn cờ `discrepancy_warning` *(đang dùng max-min > 3.0)*
+- [x] Audit log `round.lock` kèm `actor_id`, `timestamp`, `ip`
+- [x] Mở unblind: Admin xem được toàn bộ bảng điểm sau lock
 
 **DoD Phase 4:** Kịch bản 3 giám khảo chấm độc lập → không ai thấy điểm ai → Admin lock → tất cả thấy điểm + cảnh báo chênh lệch. Quay video làm bằng chứng.
 

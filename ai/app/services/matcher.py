@@ -6,7 +6,7 @@ chấm điểm để kết quả giải thích được và tái lập được.
 
 import re
 
-from app.schemas import CandidateProfile, MatchBreakdown
+from app.schemas import CandidateProfile, MatchBreakdown, SemanticMethod
 from app.services.embedder import Embedder, cosine, lexical_cosine
 from app.services.skills import extract_skills, jaccard, normalize_skill
 from app.services.text import split_chunks
@@ -73,7 +73,7 @@ def _semantic_score(
     jd_text: str,
     settings: Settings,
     embedder: Embedder,
-) -> tuple[float, str]:
+) -> tuple[float, SemanticMethod]:
     exp_chunks = split_chunks(experience_text, max_words=350)[:20]
     jd_chunks = split_chunks(jd_text, max_words=350)[:8]
 

@@ -14,6 +14,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { CandidatesModule } from './modules/candidates/candidates.module';
+import { CopilotModule } from './modules/copilot/copilot.module';
+import { EvaluationsModule } from './modules/evaluations/evaluations.module';
 import { HealthModule } from './modules/health/health.module';
 
 @Module({
@@ -35,6 +37,8 @@ import { HealthModule } from './modules/health/health.module';
     AdminModule,
     CampaignsModule,
     CandidatesModule,
+    EvaluationsModule,
+    CopilotModule,
   ],
   providers: [
     // Thứ tự quan trọng: xác thực trước, phân quyền sau

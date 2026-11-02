@@ -14,7 +14,10 @@
 > - ✅ **Phase 0** — monorepo 4 tầng (`frontend` / `backend` / `ai` / `shared`), tooling, 8 ADR.
 > - ✅ **Phase 1** — hạ tầng Docker (Postgres 16 · Redis 7 · RustFS · Mailpit), Prisma 9 bảng + 7 CHECK + trigger append-only, Auth/JWT/RBAC, **BullMQ retry + DLQ**, **upload CV lên object storage (magic-byte, signed URL)**.
 > - ✅ **Phase 2 (core business)** — Campaigns + Rounds + Criteria (US-02), Public Portal nhận hồ sơ & tra cứu (US-03), audit log append-only, payload job có `type`/`version` + endpoint reprocess.
-> - ⬜ **Phase 3** — AI Pipeline (parse/OCR, information extraction, hybrid matching, AI Copilot).
+> - ✅ **Phase 3** — AI Pipeline (parse/OCR, information extraction, hybrid matching, AI Copilot).
+> - 🚧 **Phase 4** — Evaluation API + Blind Scoring (US-05/06), lock/unblind, outlier detection, Interviewer Portal & Admin scoreboard. Còn lại: rate limit/CAPTCHA, audit viewer, biểu đồ.
+>
+> **Ghi chú UI (Phase 4/6):** màn hình xem trước CV + bảng metadata kiểu “document preview” (PDF viewer + metadata panel) sẽ dùng `react-pdf`/`pdf.js` + component bảng của `shadcn/ui`, hiển thị signed URL từ object storage và dữ liệu `ai_parsed_skills` / `ai_match_breakdown`.
 >
 > README này là **nguồn sự thật duy nhất (single source of truth)** về kiến trúc, tech stack và lộ trình triển khai.
 
@@ -454,14 +457,19 @@ ALTER TABLE criteria
 | `GET` | `/api/v1/admin/queue-probe` | Admin | — | `200` + counts + DLQ |
 | `GET` | `/api/v1/admin/queue-probe/:id` | Admin | — | `200` + trạng thái job |
 
-### 10.2. Dự kiến (Phase 3+)
+### 10.2. Phase 3–4 (đã triển khai)
 
 | Method | Endpoint | Quyền | Mô tả |
 |---|---|---|---|
-| `GET` | `/api/v1/rounds/:id/candidates` | Interviewer/Admin | Ứng viên trong vòng |
-| `POST` | `/api/v1/evaluations` | Interviewer | `{ roundId, candidateId, scores[] }` — transaction ACID |
-| `GET` | `/api/v1/rounds/:id/scores` | Interviewer/Admin | Áp dụng Blind filter ở tầng DB |
-| `POST` | `/api/v1/ai/copilot/questions` | Interviewer | `{ candidateId, roundId }` → câu hỏi gợi ý |
+| `POST` | `/internal/v1/ai/analyze` | Internal token | Bóc tách CV + hybrid matching (AI Service) |
+| `POST` | `/internal/v1/ai/copilot/questions` | Internal token | Sinh câu hỏi phỏng vấn từ skill gap (AI Service) |
+| `POST` | `/api/v1/ai/copilot/questions` | Interviewer/Admin | Proxy US-08: `{ candidateId, roundId?, count? }` |
+| `GET` | `/api/v1/rounds/:id/candidates` | Interviewer/Admin | Ứng viên trong vòng + phiếu của chính tôi |
+| `POST` | `/api/v1/evaluations` | Interviewer/Admin | `{ roundId, candidateId, scores[], generalNotes? }` — transaction ACID |
+| `PATCH` | `/api/v1/evaluations/:id` | Chủ phiếu/Admin | Sửa phiếu khi vòng `IN_PROGRESS` |
+| `GET` | `/api/v1/rounds/:id/scores` | Interviewer/Admin | Blind filter ở tầng SQL; Admin thấy toàn bộ |
+| `PATCH` | `/api/v1/admin/candidates/:id/round` | Admin | Gán ứng viên vào vòng `IN_PROGRESS` + audit |
+| `POST` | `/api/v1/admin/rounds/:id/lock` | Admin | Khoá vòng → unblind + audit `round.lock` |
 
 Quy ước chung: prefix `/api/v1`, JSON envelope `{ data, meta?, error? }`, lỗi theo RFC 7807 (`application/problem+json`), phân trang `?page=&limit=`.
 
@@ -491,24 +499,28 @@ Quy ước chung: prefix `/api/v1`, JSON envelope `{ data, meta?, error? }`, l�
 - [x] Audit log append-only cho mọi mutation + payload job có `type`/`version`
 - [x] Bù trừ file mồ côi khi ghi DB thất bại; endpoint reprocess job cho Admin
 
-### Phase 3 — AI Pipeline (Tuần 3–4)
+### Phase 3 — AI Pipeline (Tuần 3–4) ✅
 
-- [ ] PDF text extraction + **OCR fallback** khi text < 50 từ
-- [ ] Chuẩn hoá text: bỏ header/footer, gộp dòng, xử lý layout 2 cột
-- [ ] Information Extraction có schema: `skills[]`, `total_years_experience`, `roles[]`, `education`
-- [ ] **Hybrid Matching**: Hard match (Jaccard kỹ năng) 40% + Semantic match (`bge-m3`) 40% + Tiêu chí phụ 20%
-- [ ] Trả về **giải thích được (XAI)**: `matched_skills[]`, `missing_skills[]`, `reasoning`
-- [ ] US-08 AI Copilot: prompt template sinh câu hỏi từ skill gap
+- [x] PDF text extraction + **OCR fallback** khi text < 50 từ
+- [x] Chuẩn hoá text: bỏ header/footer, gộp dòng, xử lý layout 2 cột
+- [x] Information Extraction có schema: `skills[]`, `total_years_experience`, `roles[]`, `education`
+- [x] **Hybrid Matching**: Hard match (Jaccard kỹ năng) 40% + Semantic match (`bge-m3`) 40% + Tiêu chí phụ 20%
+- [x] Trả về **giải thích được (XAI)**: `matched_skills[]`, `missing_skills[]`, `reasoning`
+- [x] US-08 AI Copilot: prompt template sinh câu hỏi từ skill gap
 - [ ] Unit test cho scoring engine với bộ CV/JD mẫu
 
-### Phase 4 — Đánh giá, Blind Scoring & UI (Tuần 5)
+### Phase 4 — Đánh giá, Blind Scoring & UI (Tuần 5) 🚧
 
-- [ ] Public Portal: form nộp CV (drag & drop), trang tra cứu trạng thái
-- [ ] Interviewer Portal: rubric card, blind score, panel AI Copilot
-- [ ] Admin Dashboard: bảng xếp hạng theo `ai_match_score`, biểu đồ phân bổ điểm, nút Lock Round
+- [x] Backend Evaluation API (US-05): transaction ACID, validate đủ rubric, chặn double-submit 409
+- [x] Blind Scoring (US-06) lọc ở tầng SQL + ẩn danh tính giám khảo
+- [x] Gán ứng viên vào vòng + Lock Round/Unblind + audit log
+- [x] Outlier detection khi lệch > 3 điểm
+- [x] Interviewer Portal: rubric card + blind score + panel AI Copilot
+- [x] Admin scoreboard: tổng hợp điểm, cảnh báo lệch, nút Lock Round
+- [ ] Public Portal: form nộp CV (drag & drop) gọi API thật, trang tra cứu trạng thái
+- [ ] Admin Dashboard: bảng xếp hạng theo `ai_match_score`, biểu đồ phân bổ điểm
 - [ ] `audit_logs` + màn hình tra cứu lịch sử thao tác
 - [ ] Rate limiting + CAPTCHA cho endpoint public
-- [ ] Cảnh báo chênh lệch điểm (outlier detection) khi chênh > 3 điểm
 
 ### Phase 5 — DevOps & Showcase (Tuần 6)
 

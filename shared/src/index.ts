@@ -78,3 +78,25 @@ export const CV_UPLOAD_LIMITS = {
   /** 4 byte đầu của mọi file PDF hợp lệ. */
   magicBytes: [0x25, 0x50, 0x44, 0x46] as const,
 } as const;
+
+/** Một dòng điểm trong phiếu đánh giá (US-05). */
+export const EvaluationScoreSchema = z.object({
+  criterionId: z.number().int().positive(),
+  score: z.number().min(0).max(100),
+  comment: z.string().trim().max(1000).optional(),
+});
+
+export type EvaluationScoreInput = z.infer<typeof EvaluationScoreSchema>;
+
+/** Payload nộp phiếu đánh giá — dùng chung FE/BE. */
+export const EvaluationInputSchema = z.object({
+  roundId: z.number().int().positive(),
+  candidateId: z.number().int().positive(),
+  generalNotes: z.string().trim().max(5000).optional(),
+  scores: z.array(EvaluationScoreSchema).min(1).max(100),
+});
+
+export type EvaluationInput = z.infer<typeof EvaluationInputSchema>;
+
+/** Ngưỡng cảnh báo lệch điểm giữa giám khảo (thang 0–100). */
+export const OUTLIER_SCORE_GAP = 3;

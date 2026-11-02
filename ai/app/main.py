@@ -8,7 +8,7 @@ Phase 5 sẽ thêm `/internal/v1/ai/copilot`.
 
 from fastapi import FastAPI
 
-from app.routers import analyze, health, copilot
+from app.routers import analyze, copilot, health
 from app.services.embedder import Embedder
 from app.services.llm_client import LlmClient
 from app.settings import get_settings

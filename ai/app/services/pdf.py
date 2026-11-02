@@ -160,7 +160,7 @@ def _run_ocr(data: bytes, page_count: int, settings: Settings) -> tuple[str, lis
     warnings: list[str] = []
 
     try:
-        import pytesseract
+        import pytesseract  # type: ignore[import-untyped]
         from pdf2image import convert_from_bytes
     except ImportError:
         return "", ["Thiếu pytesseract/pdf2image — không chạy được OCR fallback"]
