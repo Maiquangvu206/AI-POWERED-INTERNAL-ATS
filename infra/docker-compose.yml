@@ -1,35 +1,44 @@
 # =============================================================================
-# Hạ tầng phát triển cho AI-Powered Internal ATS
+# AI-Powered Internal ATS — Docker Compose (hạ tầng + full stack)
+#
+# Chạy chỉ hạ tầng (Postgres/Redis/RustFS/Mailpit):
 #   docker compose -f infra/docker-compose.yml up -d
 #
-# Cổng trên máy host được chọn để KHÔNG đụng dịch vụ đang chạy sẵn:
-#   5433 -> 5432  (máy dev đã có PostgreSQL local ở 5432)
-#   6380 -> 6379  Redis
-#   9002 -> 9000  MinIO S3 API
-#   9003 -> 9001  MinIO Console
-#   1026 -> 1025  SMTP (Mailpit)
-#   8026 -> 8025  Web UI đọc mail
+# Chạy TOÀN BỘ hệ sinh thái (hạ tầng + core-api + ai-service + web):
+#   docker compose -f infra/docker-compose.yml --profile app up -d --build
+#
+# Chạy NHIỀU DỰ ÁN ĐỒNG THỜI trên cùng máy:
+#   1. Copy infra/.env.example → infra/.env
+#   2. Mỗi dự án đặt COMPOSE_PROJECT_NAME riêng + dải port riêng
+#      (xem infra/README.md mục "Nhiều dự án cùng lúc")
+#   Tên container/volume/network đều được prefix theo COMPOSE_PROJECT_NAME,
+#   nên không xung đột tên; chỉ cần tránh trùng port host.
 # =============================================================================
 
-name: ats
+name: ${COMPOSE_PROJECT_NAME:-ats}
+
+x-db-credentials: &db-credentials
+  POSTGRES_USER: ${ATS_DB_USER:-ats}
+  POSTGRES_PASSWORD: ${ATS_DB_PASSWORD:-ats_local_password}
+  POSTGRES_DB: ${ATS_DB_NAME:-ats}
 
 services:
+  # ---------------------------------------------------------------------------
+  # Hạ tầng
+  # ---------------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
-    container_name: ats-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ats
-      POSTGRES_PASSWORD: ats_local_password
-      POSTGRES_DB: ats
+      <<: *db-credentials
       TZ: Asia/Ho_Chi_Minh
       PGTZ: Asia/Ho_Chi_Minh
     ports:
-      - '5433:5432'
+      - '${ATS_POSTGRES_PORT:-5433}:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ats -d ats']
+      test: ['CMD-SHELL', 'pg_isready -U ${ATS_DB_USER:-ats} -d ${ATS_DB_NAME:-ats}']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -39,7 +48,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: ats-redis
     restart: unless-stopped
     # noeviction: KHÔNG được evict key của BullMQ, nếu không job sẽ biến mất
     command:
@@ -55,7 +63,7 @@ services:
         'noeviction',
       ]
     ports:
-      - '6379:6379'
+      - '${ATS_REDIS_PORT:-6379}:6379'
     volumes:
       - redis-data:/data
     healthcheck:
@@ -67,21 +75,20 @@ services:
       - ats-net
 
   # RustFS — S3-compatible, thay MinIO (MinIO đã ngừng publish image từ 2025)
-  # Console: http://localhost:9001  ·  S3 API: http://localhost:9000
+  # Console: http://localhost:${ATS_RUSTFS_CONSOLE_PORT:-9001}
   rustfs:
     image: rustfs/rustfs:latest
-    container_name: ats-rustfs
     restart: unless-stopped
     command:
       ['server', '/data', '--address', ':9000', '--console-enable', '--console-address', ':9001']
     environment:
-      RUSTFS_ACCESS_KEY: minioadmin
-      RUSTFS_SECRET_KEY: minioadmin
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
       RUSTFS_VOLUMES: /data
       RUSTFS_CONSOLE_ENABLE: 'true'
     ports:
-      - '9000:9000'
-      - '9001:9001'
+      - '${ATS_RUSTFS_PORT:-9000}:9000'
+      - '${ATS_RUSTFS_CONSOLE_PORT:-9001}:9001'
     volumes:
       - rustfs-data:/data
       - rustfs-logs:/logs
@@ -91,13 +98,13 @@ services:
   # Tạo bucket private ngay sau khi RustFS lên (chạy 1 lần rồi thoát)
   storage-init:
     image: amazon/aws-cli:latest
-    container_name: ats-storage-init
     depends_on:
       - rustfs
     environment:
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
-      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-minioadmin}
+      AWS_DEFAULT_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET_CV: ${S3_BUCKET_CV:-cv-files}
     entrypoint:
       - /bin/sh
       - -c
@@ -105,22 +112,113 @@ services:
         until aws --endpoint-url http://rustfs:9000 s3 ls >/dev/null 2>&1; do
           echo "⏳ chờ RustFS..."; sleep 2;
         done
-        aws --endpoint-url http://rustfs:9000 s3 mb s3://cv-files 2>/dev/null || true
-        echo "✅ bucket cv-files đã sẵn sàng (private, path-style)"
+        aws --endpoint-url http://rustfs:9000 s3 mb "s3://$$S3_BUCKET_CV" 2>/dev/null || true
+        echo "✅ bucket $$S3_BUCKET_CV đã sẵn sàng (private, path-style)"
     networks:
       - ats-net
 
   mailpit:
     image: axllent/mailpit:latest
-    container_name: ats-mailpit
     restart: unless-stopped
     environment:
       MP_MAX_MESSAGES: 5000
       MP_SMTP_AUTH_ACCEPT_ANY: 1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
     ports:
-      - '1025:1025'
-      - '8025:8025'
+      - '${ATS_SMTP_PORT:-1025}:1025'
+      - '${ATS_MAILPIT_PORT:-8025}:8025'
+    networks:
+      - ats-net
+
+  # ---------------------------------------------------------------------------
+  # Ứng dụng (profile "app") — build từ Dockerfile trong repo
+  # ---------------------------------------------------------------------------
+  core-api:
+    profiles: ['app']
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-ats}-core-api:local
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${ATS_NODE_ENV:-development}
+      PORT: 3000
+      # Dùng DNS nội bộ của compose — KHÔNG dùng localhost
+      DATABASE_URL: postgresql://${ATS_DB_USER:-ats}:${ATS_DB_PASSWORD:-ats_local_password}@postgres:5432/${ATS_DB_NAME:-ats}?schema=public
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://rustfs:9000
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+      S3_BUCKET_CV: ${S3_BUCKET_CV:-cv-files}
+      S3_FORCE_PATH_STYLE: 'true'
+      S3_SIGNED_URL_TTL: ${S3_SIGNED_URL_TTL:-600}
+      AI_SERVICE_URL: http://ai-service:8010
+      AI_INTERNAL_TOKEN: ${AI_INTERNAL_TOKEN:-change-me-internal-service-token}
+      AI_ANALYZE_TIMEOUT_MS: ${AI_ANALYZE_TIMEOUT_MS:-120000}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me-32-characters}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      WEB_ORIGIN: ${ATS_WEB_ORIGIN:-http://localhost:5173}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RUN_SEED: ${ATS_RUN_SEED:-true}
+    ports:
+      - '${ATS_API_PORT:-3000}:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rustfs:
+        condition: service_started
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/v1/health >/dev/null || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - ats-net
+
+  ai-service:
+    profiles: ['app']
+    build:
+      context: ../ai
+      dockerfile: Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-ats}-ai:local
+    restart: unless-stopped
+    environment:
+      AI_INTERNAL_TOKEN: ${AI_INTERNAL_TOKEN:-change-me-internal-service-token}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_MODEL: ${LLM_MODEL:-gpt-5.4-mini}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_API_BASE: ${LLM_API_BASE:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
+      EMBEDDING_ENABLED: ${EMBEDDING_ENABLED:-true}
+      HF_HOME: /models
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - '${ATS_AI_PORT:-8010}:8010'
+    volumes:
+      # Cache model bge-m3 giữa các lần restart (lần đầu cần internet để tải)
+      - ai-models:/models
+    networks:
+      - ats-net
+
+  web:
+    profiles: ['app']
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-ats}-web:local
+    restart: unless-stopped
+    ports:
+      - '${ATS_WEB_PORT:-5173}:80'
+    depends_on:
+      core-api:
+        condition: service_started
     networks:
       - ats-net
 
@@ -129,6 +227,7 @@ volumes:
   redis-data:
   rustfs-data:
   rustfs-logs:
+  ai-models:
 
 networks:
   ats-net:

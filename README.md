@@ -652,6 +652,28 @@ npm run db:seed
 npm run infra:ps                                    # trạng thái container
 ```
 
+**Chạy full stack bằng Docker** (không cần Node/Python trên máy):
+
+```bash
+Copy-Item infra/.env.example infra/.env             # bash: cp infra/.env.example infra/.env
+npm run docker:up                                   # hạ tầng + core-api + ai-service + web
+npm run docker:ps
+npm run docker:logs
+npm run docker:down                                 # thêm -v để xoá cả volume
+```
+
+| URL | Kỳ vọng |
+|---|---|
+| http://localhost:5173 | Web (Nginx) — Public Portal |
+| http://localhost:5173/api/v1/health | API đi qua proxy Nginx |
+| http://localhost:3000/api/docs | Swagger Core API |
+| http://localhost:8010/health | AI Service |
+
+**Nhiều dự án chạy song song:** tên container/volume/network prefix theo
+`COMPOSE_PROJECT_NAME`, toàn bộ port host đổi được qua `ATS_*_PORT`. Tạo file env
+riêng và truyền `--env-file` — chi tiết + bảng port mẫu ở
+[`infra/README.md`](infra/README.md#chạy-nhiều-dự-án-cùng-lúc).
+
 **Chẩn đoán Phase 1 (cần token ADMIN):**
 
 ```bash

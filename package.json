@@ -38,6 +38,11 @@
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "infra:ps": "docker compose -f infra/docker-compose.yml ps",
+    "docker:up": "docker compose -f infra/docker-compose.yml --profile app up -d --build",
+    "docker:down": "docker compose -f infra/docker-compose.yml --profile app down",
+    "docker:ps": "docker compose -f infra/docker-compose.yml --profile app ps",
+    "docker:logs": "docker compose -f infra/docker-compose.yml --profile app logs -f",
+    "docker:config": "docker compose -f infra/docker-compose.yml --profile app config",
     "prepare": "husky"
   },
   "devDependencies": {
