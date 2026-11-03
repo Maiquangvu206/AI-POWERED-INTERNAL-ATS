@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { ErrorAlert, Loading, PageHeader, ScoreBar, StatusBadge } from '../../components/ui';
 import { api } from '../../lib/api';
 
 interface RankingCandidate {
@@ -49,107 +50,186 @@ export function AdminCampaignPage() {
   const maxBucket = Math.max(1, ...(data?.distribution.map((bucket) => bucket.count) ?? [1]));
 
   return (
-    <main className="shell wide">
-      <header className="page-header">
-        <h1>{data ? `Xếp hạng — ${data.campaign.title}` : 'Admin Dashboard'}</h1>
-        <Link to="/admin/audit-logs" className="button-link">
-          Audit log →
-        </Link>
-      </header>
+    <main className="container-xl py-4 py-lg-5">
+      <PageHeader
+        title={data ? `Xếp hạng — ${data.campaign.title}` : 'Bảng xếp hạng'}
+        subtitle="Hồ sơ được xếp theo điểm AI match và phân bố điểm tổng quan."
+        badge={data ? <StatusBadge status={data.campaign.status} /> : undefined}
+        actions={
+          <Link to="/admin/audit-logs" className="btn btn-outline-secondary">
+            <i className="bi bi-journal-text me-1" aria-hidden="true" />
+            Audit log
+          </Link>
+        }
+      />
 
-      {loading && <p className="muted">Đang tải…</p>}
-      {error && <p className="err">{error}</p>}
+      {loading && <Loading />}
+      <ErrorAlert message={error} />
 
       {data && (
         <>
-          <section className="stats">
-            <div className="card stat">
-              <span className="muted small">Tổng hồ sơ</span>
-              <strong>{data.stats.total}</strong>
-            </div>
-            <div className="card stat">
-              <span className="muted small">Đã chấm AI</span>
-              <strong>{data.stats.processed}</strong>
-            </div>
-            <div className="card stat">
-              <span className="muted small">Chờ chấm</span>
-              <strong>{data.stats.pending}</strong>
-            </div>
-            <div className="card stat">
-              <span className="muted small">Điểm trung bình</span>
-              <strong>{data.stats.average ?? '—'}</strong>
-            </div>
-          </section>
-
-          <section className="card">
-            <h2>Phân bố điểm AI</h2>
-            <div className="chart" role="img" aria-label="Biểu đồ phân bố điểm AI">
-              {data.distribution.map((bucket) => (
-                <div className="chart-column" key={bucket.from}>
-                  <span className="small">{bucket.count}</span>
-                  <div
-                    className="chart-bar"
-                    style={{ height: `${(bucket.count / maxBucket) * 100}%` }}
-                    title={`${bucket.count} hồ sơ`}
-                  />
-                  <span className="muted small">
-                    {bucket.from}–{bucket.to}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="card">
-            <h2>Bảng xếp hạng theo AI match</h2>
-            <table className="rubric">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Ứng viên</th>
-                  <th>AI score</th>
-                  <th>Kỹ năng</th>
-                  <th>Vòng</th>
-                  <th>Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((candidate, index) => (
-                  <tr key={candidate.id}>
-                    <td>{index + 1}</td>
-                    <td>
-                      <strong>{candidate.fullName}</strong>
-                      <div className="muted small">{candidate.trackingCode}</div>
-                    </td>
-                    <td>
-                      {candidate.aiMatchScore === null ? (
-                        <span className="muted small">Chờ AI…</span>
-                      ) : (
-                        <strong>{candidate.aiMatchScore}</strong>
-                      )}
-                      {candidate.aiError && <div className="err small">Lỗi AI</div>}
-                    </td>
-                    <td className="small">
-                      {(candidate.aiParsedSkills?.skills ?? []).slice(0, 6).join(', ') || '—'}
-                    </td>
-                    <td className="small">{candidate.currentRound?.roundName ?? '—'}</td>
-                    <td>
-                      <span className={`badge ${candidate.finalStatus === 'PASSED' ? 'ok' : ''}`}>
-                        {candidate.finalStatus}
+          <div className="row g-3 mb-4">
+            {[
+              {
+                icon: 'bi-people',
+                tone: 'primary',
+                label: 'Tổng hồ sơ',
+                value: data.stats.total,
+              },
+              {
+                icon: 'bi-check2-circle',
+                tone: 'success',
+                label: 'Đã chấm AI',
+                value: data.stats.processed,
+              },
+              {
+                icon: 'bi-hourglass-split',
+                tone: 'warning',
+                label: 'Chờ chấm',
+                value: data.stats.pending,
+              },
+              {
+                icon: 'bi-bar-chart',
+                tone: 'info',
+                label: 'Điểm trung bình',
+                value: data.stats.average ?? '—',
+              },
+            ].map((stat) => (
+              <div className="col-6 col-lg-3" key={stat.label}>
+                <div className="card border-0 shadow-sm rounded-4 h-100">
+                  <div className="card-body">
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <span
+                        className={`metric-icon metric-icon-sm bg-${stat.tone}-subtle text-${stat.tone}`}
+                      >
+                        <i className={`bi ${stat.icon}`} aria-hidden="true" />
                       </span>
-                    </td>
-                  </tr>
-                ))}
-                {data.items.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="muted small">
-                      Chưa có hồ sơ nào.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </section>
+                      <span className="small text-body-secondary">{stat.label}</span>
+                    </div>
+                    <div className="fs-3 fw-bold">{stat.value}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="row g-4">
+            <div className="col-lg-4">
+              <div className="card border-0 shadow-sm rounded-4 h-100">
+                <div className="card-body">
+                  <h2 className="h6 fw-bold mb-3">
+                    <i className="bi bi-bar-chart-line me-1 text-primary" aria-hidden="true" />
+                    Phân bố điểm AI
+                  </h2>
+                  <div className="ai-chart" role="img" aria-label="Biểu đồ phân bố điểm AI">
+                    {data.distribution.map((bucket) => (
+                      <div className="ai-chart-column" key={bucket.from}>
+                        <span className="small fw-semibold">{bucket.count}</span>
+                        <div
+                          className="ai-chart-bar"
+                          style={{ height: `${Math.max((bucket.count / maxBucket) * 100, 2)}%` }}
+                          title={`${bucket.count} hồ sơ`}
+                        />
+                        <span className="text-body-secondary" style={{ fontSize: '0.7rem' }}>
+                          {bucket.from}–{bucket.to}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="small text-body-secondary mb-0 mt-2">
+                    {data.stats.pending} hồ sơ chưa có điểm AI.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-lg-8">
+              <div className="card border-0 shadow-sm rounded-4 h-100">
+                <div className="card-body">
+                  <div className="d-flex align-items-center justify-content-between mb-3">
+                    <h2 className="h6 fw-bold mb-0">
+                      <i className="bi bi-trophy me-1 text-warning" aria-hidden="true" />
+                      Bảng xếp hạng
+                    </h2>
+                    <span className="badge rounded-pill bg-primary-subtle text-primary-emphasis">
+                      {data.items.length} ứng viên
+                    </span>
+                  </div>
+
+                  <div className="table-responsive">
+                    <table className="table table-hover align-middle mb-0">
+                      <thead className="table-light">
+                        <tr>
+                          <th scope="col">#</th>
+                          <th scope="col">Ứng viên</th>
+                          <th scope="col" style={{ minWidth: 140 }}>
+                            AI score
+                          </th>
+                          <th scope="col">Kỹ năng</th>
+                          <th scope="col">Vòng</th>
+                          <th scope="col">Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.items.map((candidate, index) => (
+                          <tr key={candidate.id}>
+                            <td className="text-body-secondary">{index + 1}</td>
+                            <td>
+                              <div className="fw-semibold">{candidate.fullName}</div>
+                              <div className="small text-body-secondary">
+                                {candidate.trackingCode}
+                              </div>
+                            </td>
+                            <td>
+                              {candidate.aiMatchScore === null ? (
+                                <span className="small text-body-secondary">
+                                  <i className="bi bi-hourglass-split me-1" aria-hidden="true" />
+                                  Chờ AI…
+                                </span>
+                              ) : (
+                                <ScoreBar score={candidate.aiMatchScore} />
+                              )}
+                              {candidate.aiError && <div className="small text-danger">Lỗi AI</div>}
+                            </td>
+                            <td>
+                              <div className="d-flex flex-wrap gap-1">
+                                {(candidate.aiParsedSkills?.skills ?? [])
+                                  .slice(0, 4)
+                                  .map((skill) => (
+                                    <span
+                                      className="badge rounded-pill bg-light text-body-secondary border"
+                                      key={skill}
+                                    >
+                                      {skill}
+                                    </span>
+                                  ))}
+                                {!candidate.aiParsedSkills?.skills?.length && (
+                                  <span className="text-body-secondary small">—</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="small text-nowrap">
+                              {candidate.currentRound?.roundName ?? '—'}
+                            </td>
+                            <td>
+                              <StatusBadge status={candidate.finalStatus} />
+                            </td>
+                          </tr>
+                        ))}
+                        {data.items.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="text-center text-body-secondary py-5">
+                              Chưa có hồ sơ nào.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </>
       )}
     </main>

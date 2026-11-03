@@ -1,372 +1,110 @@
-:root {
-  color-scheme: light dark;
-  --bg: #0f1115;
-  --fg: #e8eaed;
-  --muted: #9aa0a6;
-  --card: #171a21;
-  --border: #2a2f3a;
-  --ok: #4ade80;
-  --err: #f87171;
-  --accent: #60a5fa;
+/* ---------------------------------------------------------------------------
+ * Custom styles on top of Bootstrap 5.
+ * Chỉ giữ những thành phần Bootstrap không có sẵn; mọi layout/utility khác
+ * dùng class của Bootstrap để tránh xung đột.
+ * ------------------------------------------------------------------------- */
 
-  font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
-  line-height: 1.6;
+:root {
+  --ats-bg: #f6f7f9;
+  --ats-accent: #2563eb;
+  --ats-border: #dfe3e8;
+  --ats-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
 
-* {
-  box-sizing: border-box;
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  margin: 0;
-  min-height: 100vh;
-  background: var(--bg);
-  color: var(--fg);
+  background-color: var(--ats-bg);
+  font-family: 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-.shell {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 64px 24px;
+/* Vùng hero gradient nhẹ ở trang chủ */
+.hero {
+  background: radial-gradient(120% 120% at 85% 0%, #e8efff 0%, #f6f7f9 55%, #f6f7f9 100%);
 }
 
-h1 {
-  font-size: 1.9rem;
-  margin: 0 0 4px;
-  letter-spacing: -0.02em;
-}
-
-h2 {
-  font-size: 1rem;
-  margin: 0 0 12px;
-  color: var(--muted);
-  font-weight: 500;
-}
-
-.subtitle {
-  margin: 0 0 32px;
-  color: var(--muted);
-}
-
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 24px;
-}
-
-.ok {
-  color: var(--ok);
-  margin: 0;
-}
-
-.err {
-  color: var(--err);
-  margin: 0;
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.small {
-  font-size: 0.85rem;
-}
-
-code {
-  background: #0b0d11;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px 6px;
-  font-size: 0.9em;
-  color: var(--accent);
-}
-
-/* ---------------------------------------------------------------------------
- * Phase 4 — Portal layouts
- * ------------------------------------------------------------------------- */
-
-.shell.wide {
-  max-width: 1200px;
-}
-
-.page-header {
-  display: flex;
+/* Logo mark dạng ô vuông bo tròn có gradient */
+.brand-mark {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.badge {
-  display: inline-block;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 0.75rem;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-.badge.ok {
-  border-color: var(--ok);
-  color: var(--ok);
-}
-
-.interviewer-layout {
-  display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-}
-
-@media (max-width: 860px) {
-  .interviewer-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-.candidate-list ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-
-.candidate-list button {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  text-align: left;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  color: inherit;
-  cursor: pointer;
-}
-
-.candidate-list button:hover,
-.candidate-list button.active {
-  border-color: var(--accent);
-}
-
-.scoring-column {
-  display: grid;
-  gap: 20px;
-}
-
-.scoring-header,
-.scoring-footer,
-.copilot-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.rubric {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 12px 0 16px;
-}
-
-.rubric th,
-.rubric td {
-  text-align: left;
-  padding: 8px 6px;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.92rem;
-}
-
-.rubric th {
-  color: var(--muted);
-  font-weight: 500;
-}
-
-.rubric input {
-  width: 80px;
-}
-
-.field {
-  display: grid;
-  gap: 4px;
-  margin-bottom: 16px;
-}
-
-input,
-textarea,
-button {
-  font: inherit;
-  color: inherit;
-  background: #0b0d11;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-}
-
-button {
-  background: var(--accent);
-  border-color: transparent;
-  color: #06111f;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.copilot .questions {
-  margin: 12px 0 0;
-  padding-left: 20px;
-  display: grid;
-  gap: 8px;
-}
-
-.badge.warn {
-  border-color: #fbbf24;
-  color: #fbbf24;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.evaluation-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
-}
-
-.evaluation-card {
-  border: 1px solid var(--border);
+  justify-content: center;
+  width: 34px;
+  height: 34px;
   border-radius: 10px;
-  padding: 12px;
+  background: linear-gradient(135deg, #2563eb, #60a5fa);
+  color: #fff;
+  font-size: 1rem;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.28);
+  flex: 0 0 auto;
 }
 
-.evaluation-card header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.score-pill {
-  margin-left: auto;
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  border-radius: 999px;
-  padding: 1px 8px;
-  font-size: 0.8rem;
-}
-
-.detail-list {
-  margin: 8px 0;
-  padding-left: 18px;
-  font-size: 0.9rem;
-}
-
-/* ---------------------------------------------------------------------------
- * Phase 4 — Public portal & Admin dashboard
- * ------------------------------------------------------------------------- */
-
-a {
-  color: var(--accent);
-}
-
-.apply-form .field,
-.field {
-  display: grid;
-  gap: 4px;
-  margin-bottom: 14px;
-}
-
-.dropzone {
-  border: 2px dashed var(--border);
-  border-radius: 12px;
-  padding: 28px 16px;
-  text-align: center;
-  color: var(--muted);
-  cursor: pointer;
-  margin-bottom: 16px;
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease;
-}
-
-.dropzone.dragging {
-  border-color: var(--accent);
-  color: var(--fg);
-}
-
-.inline-form {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.inline-form input {
-  flex: 1;
-  min-width: 180px;
-}
-
-.kv {
-  display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 8px 16px;
-  margin: 0;
-}
-
-.kv dt {
-  color: var(--muted);
-}
-
-.kv dd {
-  margin: 0;
-}
-
-.home-actions {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-}
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.stat {
-  display: grid;
-  gap: 2px;
-  margin-bottom: 0;
-}
-
-.stat strong {
+.brand-mark-lg {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
   font-size: 1.5rem;
 }
 
-.chart {
+/* Ô icon tròn cho card thống kê / tính năng */
+.metric-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  font-size: 1.15rem;
+  flex: 0 0 auto;
+}
+
+.metric-icon-sm {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
+
+/* Dropzone upload CV */
+.dropzone {
+  border: 2px dashed var(--ats-border);
+  border-radius: 14px;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--bs-secondary-color);
+  background: #fff;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.dropzone:hover,
+.dropzone:focus-visible,
+.dropzone.dragging {
+  border-color: var(--ats-accent);
+  color: var(--bs-body-color);
+  background: #f3f6fb;
+}
+
+.dropzone:focus-visible {
+  outline: 2px solid var(--ats-accent);
+  outline-offset: 2px;
+}
+
+/* Biểu đồ cột phân bố điểm AI */
+.ai-chart {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
+  gap: 10px;
   height: 180px;
   padding-top: 8px;
 }
 
-.chart-column {
+.ai-chart-column {
   flex: 1;
   height: 100%;
   display: flex;
@@ -374,27 +112,27 @@ a {
   justify-content: flex-end;
   align-items: center;
   gap: 4px;
+  text-align: center;
 }
 
-.chart-bar {
+.ai-chart-bar {
   width: 100%;
   max-width: 64px;
   min-height: 2px;
-  background: linear-gradient(180deg, var(--accent), #2563eb);
+  background: linear-gradient(180deg, #60a5fa, var(--ats-accent));
   border-radius: 6px 6px 0 0;
+  transition: height 0.2s ease;
 }
 
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 16px;
+/* Tinh chỉnh nhẹ cho card/table của Bootstrap */
+.card {
+  box-shadow: var(--ats-shadow);
 }
 
-.button-link {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 12px;
-  text-decoration: none;
+.table > :not(caption) > * > * {
+  padding-block: 0.7rem;
+}
+
+code {
+  color: var(--ats-accent);
 }

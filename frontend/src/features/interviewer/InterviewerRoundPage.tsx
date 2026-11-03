@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { ErrorAlert, Loading, PageHeader, StatusBadge } from '../../components/ui';
 import { api } from '../../lib/api';
 import { CopilotPanel } from './CopilotPanel';
 import { ScoringPanel } from './ScoringPanel';
@@ -36,58 +37,92 @@ export function InterviewerRoundPage() {
 
   if (!Number.isInteger(roundIdNumber)) {
     return (
-      <main className="shell">
-        <p className="err">roundId không hợp lệ</p>
+      <main className="container-xl py-5">
+        <ErrorAlert message="roundId không hợp lệ" />
       </main>
     );
   }
 
   return (
-    <main className="shell wide">
-      <header className="page-header">
-        <h1>{data ? `Chấm điểm — ${data.round.roundName}` : 'Interviewer Portal'}</h1>
-        {data && (
-          <span className={`badge ${data.round.status === 'IN_PROGRESS' ? 'ok' : ''}`}>
-            {data.round.status}
-          </span>
-        )}
-      </header>
+    <main className="container-xl py-4 py-lg-5">
+      <PageHeader
+        title={data ? `Chấm điểm — ${data.round.roundName}` : 'Cổng giám khảo'}
+        subtitle="Chọn ứng viên, chấm theo rubric và tham khảo câu hỏi từ AI Copilot."
+        badge={data ? <StatusBadge status={data.round.status} /> : undefined}
+      />
 
-      {loading && <p className="muted">Đang tải…</p>}
-      {error && <p className="err">{error}</p>}
+      {loading && <Loading />}
+      <ErrorAlert message={error} />
 
       {data && (
-        <div className="interviewer-layout">
-          <section className="candidate-list card">
-            <h2>Ứng viên ({data.candidates.length})</h2>
-            <ul>
-              {data.candidates.map((candidate) => (
-                <li key={candidate.id}>
-                  <button
-                    type="button"
-                    className={selected?.id === candidate.id ? 'active' : ''}
-                    onClick={() => setSelected(candidate)}
-                  >
-                    <strong>{candidate.fullName}</strong>
-                    <span className="muted small">
-                      {candidate.aiMatchScore === null
-                        ? 'Chưa chấm AI'
-                        : `AI ${candidate.aiMatchScore}/100`}
-                      {' · '}
-                      {candidate.myEvaluation ? 'Đã nộp' : 'Chưa nộp'}
-                    </span>
-                  </button>
-                </li>
-              ))}
-              {data.candidates.length === 0 && (
-                <li className="muted small">Chưa có ứng viên trong vòng này.</li>
-              )}
-            </ul>
-          </section>
+        <div className="row g-4">
+          <div className="col-lg-4">
+            <div className="card border-0 shadow-sm rounded-4 sticky-lg-top" style={{ top: 88 }}>
+              <div className="card-body">
+                <div className="d-flex align-items-center justify-content-between mb-3">
+                  <h2 className="h6 fw-bold mb-0">
+                    <i className="bi bi-people me-1 text-primary" aria-hidden="true" />
+                    Ứng viên
+                  </h2>
+                  <span className="badge rounded-pill bg-primary-subtle text-primary-emphasis">
+                    {data.candidates.length}
+                  </span>
+                </div>
 
-          <div className="scoring-column">
+                <div className="list-group list-group-flush">
+                  {data.candidates.map((candidate) => {
+                    const active = selected?.id === candidate.id;
+                    return (
+                      <button
+                        key={candidate.id}
+                        type="button"
+                        className={`list-group-item list-group-item-action rounded-3 mb-1 border-0 ${
+                          active ? 'active' : ''
+                        }`}
+                        onClick={() => setSelected(candidate)}
+                        aria-pressed={active}
+                      >
+                        <div className="d-flex justify-content-between align-items-start gap-2">
+                          <span className="fw-semibold">{candidate.fullName}</span>
+                          {candidate.myEvaluation ? (
+                            <span
+                              className={`badge rounded-pill ${
+                                active
+                                  ? 'bg-white text-primary'
+                                  : 'bg-success-subtle text-success-emphasis'
+                              }`}
+                            >
+                              Đã nộp
+                            </span>
+                          ) : (
+                            <span className="badge rounded-pill bg-warning-subtle text-warning-emphasis">
+                              Chưa nộp
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          className={`small ${active ? 'text-white-50' : 'text-body-secondary'}`}
+                        >
+                          {candidate.aiMatchScore === null
+                            ? 'Chưa chấm AI'
+                            : `AI match ${candidate.aiMatchScore}/100`}
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {data.candidates.length === 0 && (
+                    <p className="text-body-secondary small mb-0 py-3">
+                      Chưa có ứng viên trong vòng này.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-lg-8">
             {selected ? (
-              <>
+              <div className="d-flex flex-column gap-4">
                 <ScoringPanel
                   key={`${selected.id}-${selected.myEvaluation?.id ?? 'new'}`}
                   round={data.round}
@@ -95,9 +130,17 @@ export function InterviewerRoundPage() {
                   onSubmitted={() => void load()}
                 />
                 <CopilotPanel candidateId={selected.id} roundId={data.round.id} />
-              </>
+              </div>
             ) : (
-              <p className="muted">Chọn một ứng viên để chấm điểm.</p>
+              <div className="card border-0 shadow-sm rounded-4">
+                <div className="card-body text-center py-5 text-body-secondary">
+                  <i
+                    className="bi bi-person-check display-5 text-body-tertiary"
+                    aria-hidden="true"
+                  />
+                  <p className="mt-3 mb-0">Chọn một ứng viên để bắt đầu chấm điểm.</p>
+                </div>
+              </div>
             )}
           </div>
         </div>
