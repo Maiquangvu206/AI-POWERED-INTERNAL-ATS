@@ -1,9 +1,3 @@
-/* ---------------------------------------------------------------------------
- * Custom styles on top of Bootstrap 5.
- * Chỉ giữ những thành phần Bootstrap không có sẵn; mọi layout/utility khác
- * dùng class của Bootstrap để tránh xung đột.
- * ------------------------------------------------------------------------- */
-
 :root {
   --ats-bg: #f6f7f9;
   --ats-accent: #2563eb;
@@ -21,12 +15,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Vùng hero gradient nhẹ ở trang chủ */
 .hero {
   background: radial-gradient(120% 120% at 85% 0%, #e8efff 0%, #f6f7f9 55%, #f6f7f9 100%);
 }
 
-/* Logo mark dạng ô vuông bo tròn có gradient */
 .brand-mark {
   display: inline-flex;
   align-items: center;
@@ -48,7 +40,6 @@ body {
   font-size: 1.5rem;
 }
 
-/* Ô icon tròn cho card thống kê / tính năng */
 .metric-icon {
   display: inline-flex;
   align-items: center;
@@ -67,7 +58,6 @@ body {
   font-size: 0.95rem;
 }
 
-/* Dropzone upload CV */
 .dropzone {
   border: 2px dashed var(--ats-border);
   border-radius: 14px;
@@ -95,7 +85,6 @@ body {
   outline-offset: 2px;
 }
 
-/* Biểu đồ cột phân bố điểm AI */
 .ai-chart {
   display: flex;
   align-items: flex-end;
@@ -124,7 +113,6 @@ body {
   transition: height 0.2s ease;
 }
 
-/* Tinh chỉnh nhẹ cho card/table của Bootstrap */
 .card {
   box-shadow: var(--ats-shadow);
 }

@@ -80,7 +80,6 @@ export function HomePage() {
 
   return (
     <main>
-      {/* Hero */}
       <section className="hero border-bottom">
         <div className="container-xl py-5">
           <div className="row align-items-center g-5">
@@ -160,7 +159,6 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Tính năng */}
       <section className="container-xl py-5">
         <div className="row g-4 mb-5">
           {FEATURES.map((feature) => (
@@ -180,7 +178,6 @@ export function HomePage() {
           ))}
         </div>
 
-        {/* Danh sách chiến dịch */}
         <div
           id="vi-tri"
           className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3"

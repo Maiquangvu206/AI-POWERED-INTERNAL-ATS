@@ -7,10 +7,8 @@ import { AppModule } from './app.module';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 
-  // Toàn bộ endpoint nằm dưới /api/v1
   app.setGlobalPrefix('api/v1');
 
-  // Đọc refresh token từ HttpOnly cookie
   app.use(cookieParser());
 
   app.useGlobalPipes(

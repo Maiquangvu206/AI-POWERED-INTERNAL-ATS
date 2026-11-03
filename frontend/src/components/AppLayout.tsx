@@ -5,10 +5,6 @@ import { getAccessToken, setAccessToken } from '../lib/api';
 const navLinkClass = ({ isActive }: { isActive: boolean }): string =>
   `nav-link px-2${isActive ? ' active fw-semibold' : ''}`;
 
-/**
- * Khung giao diện chung: navbar + nội dung + footer.
- * Dùng cho mọi route để UX nhất quán giữa Public Portal và khu nội bộ.
- */
 export function AppLayout(): React.JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();

@@ -47,7 +47,6 @@ const STATUS_ICON: Record<string, string> = {
   REJECTED: 'bi-x-circle',
 };
 
-/** Badge trạng thái dùng chung cho campaign / round / hồ sơ. */
 export function StatusBadge({ status }: { status: string }): React.JSX.Element {
   const tone = STATUS_TONE[status] ?? 'secondary';
   const icon = STATUS_ICON[status];

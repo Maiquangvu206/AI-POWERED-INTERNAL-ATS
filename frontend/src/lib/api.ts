@@ -1,5 +1,3 @@
-/** Client API tối giản cho Frontend — dùng chung access token trong localStorage. */
-
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
 const TOKEN_KEY = 'ats.access_token';
 
@@ -39,7 +37,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
       const body = (await response.json()) as { message?: string; error?: string };
       message = body.message ?? body.error ?? message;
     } catch {
-      // body không phải JSON — giữ message mặc định
+      // Body không phải JSON.
     }
     throw new ApiError(response.status, message);
   }
