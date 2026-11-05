@@ -162,6 +162,13 @@ services:
       BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
       WEB_ORIGIN: ${ATS_WEB_ORIGIN:-http://localhost:5173}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      # Mailpit nhận mọi email ở dev; production trỏ SMTP_HOST sang nhà cung cấp thật
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-AI-Powered ATS <no-reply@ats.local>}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       RUN_SEED: ${ATS_RUN_SEED:-true}
     ports:
@@ -173,6 +180,8 @@ services:
         condition: service_healthy
       rustfs:
         condition: service_started
+      mailpit:
+        condition: service_healthy
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/v1/health >/dev/null || exit 1']
       interval: 10s

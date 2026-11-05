@@ -16,7 +16,8 @@
 > - ✅ **Phase 2 (core business)** — Campaigns + Rounds + Criteria (US-02), Public Portal nhận hồ sơ & tra cứu (US-03), audit log append-only, payload job có `type`/`version` + endpoint reprocess.
 > - ✅ **Phase 3** — AI Pipeline (parse/OCR, information extraction, hybrid matching, AI Copilot).
 > - ✅ **Phase 4** — Evaluation API + Blind Scoring (US-05/06), lock/unblind, outlier detection, Interviewer Portal, Admin ranking + biểu đồ, audit viewer, rate limit + CAPTCHA (Turnstile).
-> - ⬜ **Phase 5** — DevOps, OpenAPI, seed demo, walkthrough.
+> - ✅ **Phase 5** — Email bất đồng bộ (BullMQ `email` + retry/DLQ + rate limit, Mailpit) với 3 template `application-received` / `round-result` / `final-result`; AI Copilot guardrail, cache Redis 24h, rate limit 10/giờ, fallback tĩnh, UI disclaimer.
+> - ⬜ **Phase 6** — Frontend ba portal hoàn thiện, DevOps, walkthrough.
 >
 > **Ghi chú UI:** màn hình xem trước CV + bảng metadata kiểu “document preview” (PDF viewer + metadata panel) sẽ dùng `react-pdf`/`pdf.js` + component bảng của `shadcn/ui`, hiển thị signed URL từ object storage và dữ liệu `ai_parsed_skills` / `ai_match_breakdown` — dự kiến ở Phase 6.
 >

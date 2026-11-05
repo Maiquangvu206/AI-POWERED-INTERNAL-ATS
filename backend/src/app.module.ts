@@ -10,6 +10,7 @@ import { validateEnv } from './config/env.validation';
 import { CaptchaModule } from './infra/captcha/captcha.module';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { QueueModule } from './infra/queue/queue.module';
+import { RedisModule } from './infra/redis/redis.module';
 import { StorageModule } from './infra/storage/storage.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -19,6 +20,7 @@ import { CandidatesModule } from './modules/candidates/candidates.module';
 import { CopilotModule } from './modules/copilot/copilot.module';
 import { EvaluationsModule } from './modules/evaluations/evaluations.module';
 import { HealthModule } from './modules/health/health.module';
+import { MailModule } from './modules/mail/mail.module';
 
 @Module({
   imports: [
@@ -33,10 +35,12 @@ import { HealthModule } from './modules/health/health.module';
     PrismaModule,
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
     CaptchaModule,
+    RedisModule,
     QueueModule,
     StorageModule,
     AuditModule,
     HealthModule,
+    MailModule,
     AuthModule,
     AdminModule,
     CampaignsModule,

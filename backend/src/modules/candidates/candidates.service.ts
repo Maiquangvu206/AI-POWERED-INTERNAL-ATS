@@ -2,19 +2,22 @@ import { randomInt } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { CampaignStatus } from '@prisma/client';
-import { ApplyFormSchema } from '@ats/shared';
+import { CampaignStatus, FinalStatus } from '@prisma/client';
+import { ApplyFormSchema, Role } from '@ats/shared';
 import type { ClientMeta } from '../../common/decorators/client-meta.decorator';
+import type { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { CaptchaService } from '../../infra/captcha/captcha.service';
 import { QueueService } from '../../infra/queue/queue.service';
 import { StorageService } from '../../infra/storage/storage.service';
 import { inspectCvFile } from '../../infra/storage/cv-file.validation';
 import { AuditService } from '../audit/audit.service';
+import { MailService } from '../mail/mail.service';
 import { isUniqueViolation } from '../campaigns/campaigns.utils';
 
 /** Bỏ các ký tự dễ nhầm (I, O, 0, 1) để ứng viên đọc/ghi mã không sai. */
@@ -35,6 +38,7 @@ export class CandidatesService {
     private readonly queue: QueueService,
     private readonly audit: AuditService,
     private readonly captcha: CaptchaService,
+    private readonly mail: MailService,
   ) {}
 
   /**
@@ -48,7 +52,14 @@ export class CandidatesService {
     body: Record<string, unknown>,
     file: Express.Multer.File | undefined,
     meta?: ClientMeta,
+    actor?: AuthenticatedUser,
   ) {
+    if (actor && (actor.role === Role.ADMIN || actor.role === Role.INTERVIEWER)) {
+      throw new ForbiddenException(
+        'Tài khoản nội bộ không thể nộp hồ sơ ứng viên. Vui lòng đăng xuất hoặc dùng cửa sổ ẩn danh.',
+      );
+    }
+
     const campaign = await this.prisma.campaign.findUnique({
       where: { slug },
       select: {
@@ -135,6 +146,16 @@ export class CandidatesService {
       },
       ip: meta?.ip,
       userAgent: meta?.userAgent,
+    });
+
+    // Không chờ SMTP: MailService chỉ đẩy job, worker gửi sau.
+    await this.mail.sendApplicationReceived({
+      candidateId: candidate.id,
+      to: parsed.data.email,
+      fullName: parsed.data.fullName,
+      campaignTitle: campaign.title,
+      trackingCode: candidate.trackingCode,
+      submittedAt: candidate.createdAt,
     });
 
     return {
@@ -280,6 +301,67 @@ export class CandidatesService {
       jobId: String(job.id),
       queue: 'cv-processing',
     };
+  }
+
+  /**
+   * Admin chốt kết quả cuối (PASSED/REJECTED) và gửi email cho ứng viên.
+   * Đặt lại PENDING chỉ để sửa sai — không gửi email.
+   */
+  async setFinalStatus(
+    candidateId: number,
+    status: FinalStatus,
+    actorId: number,
+    meta?: ClientMeta,
+  ) {
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { id: candidateId },
+      select: {
+        id: true,
+        finalStatus: true,
+        fullName: true,
+        email: true,
+        trackingCode: true,
+        campaign: { select: { title: true } },
+      },
+    });
+
+    if (!candidate) {
+      throw new NotFoundException(`Không tìm thấy hồ sơ #${candidateId}`);
+    }
+
+    if (candidate.finalStatus === status) {
+      return { candidateId, finalStatus: status, changed: false, emailQueued: false };
+    }
+
+    await this.prisma.candidate.update({
+      where: { id: candidateId },
+      data: { finalStatus: status },
+    });
+
+    await this.audit.record({
+      actorId,
+      action: 'candidate.final_status',
+      entityType: 'candidate',
+      entityId: candidateId,
+      before: { finalStatus: candidate.finalStatus },
+      after: { finalStatus: status },
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+    });
+
+    const emailQueued = status !== FinalStatus.PENDING;
+    if (emailQueued) {
+      await this.mail.sendFinalResult({
+        candidateId: candidate.id,
+        to: candidate.email,
+        fullName: candidate.fullName,
+        campaignTitle: candidate.campaign.title,
+        status,
+        trackingCode: candidate.trackingCode,
+      });
+    }
+
+    return { candidateId, finalStatus: status, changed: true, emailQueued };
   }
 
   /**

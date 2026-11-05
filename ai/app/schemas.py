@@ -101,7 +101,15 @@ class CopilotRequest(BaseModel):
     count: int = Field(default=5, ge=1, le=10)
 
 
+class CopilotSuggestion(BaseModel):
+    """Một câu hỏi gợi ý kèm lý do và tín hiệu cần quan sát."""
+
+    question: str = Field(..., min_length=5, max_length=1000)
+    rationale: str = Field(default="", max_length=1000)
+    expected_signals: list[str] = Field(default_factory=list, max_length=10)
+
+
 class CopilotResponse(BaseModel):
-    questions: list[str]
+    suggestions: list[CopilotSuggestion]
     llm_used: bool = False
     fallback_used: bool = False

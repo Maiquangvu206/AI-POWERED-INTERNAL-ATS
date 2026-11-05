@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ErrorAlert } from '../../components/ui';
 import { api } from '../../lib/api';
-import type { CopilotResponse } from './types';
+import type { CopilotResponse, CopilotSuggestion } from './types';
 
 interface Props {
   candidateId: number;
@@ -9,8 +9,11 @@ interface Props {
 }
 
 export function CopilotPanel({ candidateId, roundId }: Props) {
-  const [questions, setQuestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<CopilotSuggestion[]>([]);
   const [missingSkills, setMissingSkills] = useState<string[]>([]);
+  const [cached, setCached] = useState(false);
+  const [fallbackUsed, setFallbackUsed] = useState(false);
+  const [copied, setCopied] = useState<number | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [error, setError] = useState('');
 
@@ -22,12 +25,34 @@ export function CopilotPanel({ candidateId, roundId }: Props) {
         method: 'POST',
         body: JSON.stringify({ candidateId, roundId, count: 5 }),
       });
-      setQuestions(result.questions);
+      setSuggestions(result.suggestions);
       setMissingSkills(result.missingSkills);
+      setCached(result.cached);
+      setFallbackUsed(result.fallbackUsed);
       setState('idle');
     } catch (err) {
       setState('error');
       setError(err instanceof Error ? err.message : 'Không sinh được câu hỏi');
+    }
+  };
+
+  const copyQuestion = async (index: number, suggestion: CopilotSuggestion): Promise<void> => {
+    const text = [
+      suggestion.question,
+      suggestion.rationale ? `Vì sao: ${suggestion.rationale}` : '',
+      suggestion.expectedSignals.length > 0
+        ? `Tín hiệu cần quan sát: ${suggestion.expectedSignals.join('; ')}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(index);
+      window.setTimeout(() => setCopied(null), 1_500);
+    } catch {
+      setError('Trình duyệt không cho phép copy — hãy chọn và copy thủ công.');
     }
   };
 
@@ -80,11 +105,60 @@ export function CopilotPanel({ candidateId, roundId }: Props) {
           </div>
         )}
 
-        {questions.length > 0 ? (
+        {(cached || fallbackUsed) && (
+          <p className="small text-body-secondary mb-3">
+            {cached && (
+              <span className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis me-1">
+                <i className="bi bi-clock-history me-1" aria-hidden="true" />
+                Lấy từ cache 24h
+              </span>
+            )}
+            {fallbackUsed && (
+              <span className="badge rounded-pill bg-info-subtle text-info-emphasis">
+                <i className="bi bi-shield-check me-1" aria-hidden="true" />
+                Câu hỏi mẫu (AI tạm thời không khả dụng)
+              </span>
+            )}
+          </p>
+        )}
+
+        {suggestions.length > 0 ? (
           <ol className="list-group list-group-numbered list-group-flush">
-            {questions.map((question, index) => (
-              <li className="list-group-item px-0 small" key={index}>
-                {question}
+            {suggestions.map((suggestion, index) => (
+              <li className="list-group-item px-0 py-3" key={`${index}-${suggestion.question}`}>
+                <div className="d-flex justify-content-between gap-2">
+                  <p className="fw-semibold mb-1">{suggestion.question}</p>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm flex-shrink-0"
+                    onClick={() => void copyQuestion(index, suggestion)}
+                    title="Copy câu hỏi kèm gợi ý"
+                  >
+                    <i
+                      className={`bi ${copied === index ? 'bi-check2' : 'bi-clipboard'}`}
+                      aria-hidden="true"
+                    />
+                    <span className="visually-hidden">Copy câu hỏi</span>
+                  </button>
+                </div>
+                {suggestion.rationale && (
+                  <p className="small text-body-secondary mb-2">
+                    <i className="bi bi-info-circle me-1" aria-hidden="true" />
+                    {suggestion.rationale}
+                  </p>
+                )}
+                {suggestion.expectedSignals.length > 0 && (
+                  <div className="d-flex flex-wrap gap-1">
+                    {suggestion.expectedSignals.map((signal) => (
+                      <span
+                        className="badge rounded-pill bg-success-subtle text-success-emphasis fw-normal"
+                        key={signal}
+                      >
+                        {signal}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ol>
@@ -96,6 +170,11 @@ export function CopilotPanel({ candidateId, roundId }: Props) {
             </p>
           )
         )}
+
+        <p className="small text-body-secondary border-top pt-3 mt-3 mb-0">
+          <i className="bi bi-exclamation-triangle me-1 text-warning" aria-hidden="true" />
+          Gợi ý do AI tạo, cần giám khảo thẩm định trước khi sử dụng.
+        </p>
       </div>
     </aside>
   );

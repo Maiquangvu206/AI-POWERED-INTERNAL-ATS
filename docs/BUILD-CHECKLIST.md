@@ -231,6 +231,14 @@
 
 **DoD Phase 3:** Nộp 10 CV → 10 record có điểm trong < 2 phút; ít nhất 1 CV scan được OCR thành công; xem được breakdown điểm trên Prisma Studio.
 
+**Ghi chú tiến độ (2026-11-03) — các mục còn mở:**
+- `3.1 Dockerfile` — **chưa đạt**: image `ats-ai:local` thực tế **10.1 GB** vì `pip install -e ".[ai]"` kéo torch bản CUDA (`nvidia-*`). Chưa pre-download model lúc build (`/health` trả `model_loaded=false`). Lưu ý: mục tiêu “≤ 1.5 GB” xung đột với việc nhúng sẵn `bge-m3` (~2.2 GB) → cần chốt: nới giới hạn image **hoặc** cache model qua volume.
+- `3.2 Test 10 CV mẫu` — chưa có bộ CV mẫu (text/scan/Canva) trong repo; 20 unit test hiện có không thay thế được kiểm thử E2E.
+- `3.4 Latency < 8s/CV` — chưa benchmark; pipeline chỉ ghi log `ms=` (chưa có số liệu đo chính thức).
+- `3.4 Docstring + unit test từng thành phần` — unit test đã có (`test_matcher.py`, `test_skills.py`) và pass; chỉ còn thiếu docstring công thức chi tiết ở `_semantic_score` / `_extra_score`.
+- `3.5 Metrics` — chưa có Prometheus client, `/metrics`, `ai_processing_duration_seconds`, `ai_jobs_failed_total`.
+
+
 ---
 
 ## Phase 4 — Đánh giá & Blind Scoring (Ngày 17–21)
@@ -275,31 +283,51 @@
 
 **DoD Phase 4:** Kịch bản 3 giám khảo chấm độc lập → không ai thấy điểm ai → Admin lock → tất cả thấy điểm + cảnh báo chênh lệch. Quay video làm bằng chứng.
 
+### 4.5. Kiểm soát truy cập portal công khai
+
+- [x] Chặn tài khoản nội bộ (`ADMIN`/`INTERVIEWER`) nộp hồ sơ ứng viên: backend trả `403` khi request có Bearer token hợp lệ (`OptionalJwtAuthGuard`), UI hiện cảnh báo + nút “Đăng xuất & ứng tuyển”.
+- [ ] Trang landing cho giám khảo `/interviewer` + `GET /rounds` (danh sách vòng được phân công) — **chưa làm**; hiện đăng nhập xong giám khảo về `/` (portal công khai).
+- [ ] Redirect tự động giám khảo khỏi `/apply/:slug` — **chưa làm**; hiện chỉ chặn form và hiển thị cảnh báo.
+
+
 ---
 
 ## Phase 5 — Thông báo & AI Copilot (Ngày 22–24)
 
 ### 5.1. Email (US-07)
 
-- [ ] `MailModule` + BullMQ queue `email`
-- [ ] Template MJML/Handlebars: `application-received`, `round-result`, `final-result`
-- [ ] Gửi **bất đồng bộ** — request không chờ SMTP
-- [ ] Retry 3 lần, DLQ sau đó
-- [ ] Rate limit gửi theo ứng viên (tránh spam khi retry loop)
-- [ ] Test bằng MailHog: xem được HTML render đúng, tiếng Việt không lỗi font
+- [x] `MailModule` + BullMQ queue `email` (kèm queue `email-dlq`)
+- [x] Template HTML: `application-received`, `round-result`, `final-result` (+ base layout dùng chung)
+- [x] Gửi **bất đồng bộ** — request chỉ enqueue job, không chờ SMTP
+- [x] Retry 3 lần (backoff exponential), sau đó chuyển `email-dlq`
+- [x] Rate limit gửi theo ứng viên (10 email/giờ, fixed-window Redis) tránh spam khi retry loop
+- [x] Test bằng **Mailpit** (thay MailHog): HTML render đúng, raw mail là UTF-8/quoted-printable, tiếng Việt không lỗi font
+- [x] `application-received` gửi ngay sau khi ứng viên nộp hồ sơ
+- [x] `round-result` gửi khi Admin chuyển ứng viên sang vòng mới (không gửi lần gán đầu)
+- [x] `final-result` gửi khi Admin chốt ĐẠT/TỪ CHỐI (`PATCH /admin/candidates/:id/final-status`)
 
 ### 5.2. AI Copilot (US-08)
 
-- [ ] `POST /ai/copilot/questions` (Interviewer) — trả 3–5 câu hỏi
-- [ ] Input: `candidate.ai_parsed_skills`, `missing_skills`, `jd_text`, `round.name`
-- [ ] Prompt template có guardrail: **không** sinh câu hỏi về tuổi/giới tính/tôn giáo/hôn nhân (vi phạm luật lao động)
-- [ ] Output JSON: `[{ question, rationale, expected_signals[] }]`
-- [ ] Cache theo `(candidate_id, round_id)` — TTL 24h (Redis)
-- [ ] Rate limit: 10 request/giám khảo/giờ
-- [ ] Fallback khi LLM lỗi: trả template câu hỏi tĩnh theo kỹ năng thiếu
-- [ ] UI hiển thị disclaimer "Gợi ý do AI tạo, cần giám khảo thẩm định"
+- [x] `POST /ai/copilot/questions` (Interviewer) — trả 3–5 câu hỏi
+- [x] Input: `candidate.ai_parsed_skills`, `missing_skills`, `jd_text`, `round.name`
+- [x] Prompt template có guardrail: **không** sinh câu hỏi về tuổi/giới tính/tôn giáo/hôn nhân (vi phạm luật lao động); lọc lại output bằng regex ở cả AI Service và Core API
+- [x] Output JSON: `[{ question, rationale, expected_signals[] }]`
+- [x] Cache theo `(candidate_id, round_id)` — TTL 24h (Redis), cache cả kết quả fallback để tránh gọi AI Service liên tục
+- [x] Rate limit: 10 request/giám khảo/giờ → vượt trả **429** kèm thời gian chờ
+- [x] Fallback khi LLM lỗi/chưa cấu hình: trả template câu hỏi tĩnh theo kỹ năng thiếu
+- [x] UI hiển thị disclaimer "Gợi ý do AI tạo, cần giám khảo thẩm định", kèm rationale + expected signals + nút copy
+- [x] UI hiển thị badge khi kết quả lấy từ cache hoặc fallback
 
-**DoD Phase 5:** Nộp đơn → nhận email trong MailHog < 5s. Giám khảo bấm "Gợi ý câu hỏi" → 5 câu hỏi liên quan đúng skill gap.
+**Bằng chứng đã verify (2026-11-05):**
+- Nộp hồ sơ → email `application-received` xuất hiện trong Mailpit sau ~0.2s (log `MailerService: Đã gửi email`).
+- `PATCH /admin/candidates/4/final-status` → `emailQueued: true` + email `final-result` trong Mailpit.
+- Tạo 2 vòng, chuyển ứng viên sang vòng mới → email `round-result` được gửi.
+- Copilot: gọi lần 1 `cached: false`, lần 2 `cached: true`; gọi 11 trong cùng giờ → **429**.
+- Guardrail: câu hỏi chứa "tuổi" bị lọc khỏi output.
+
+**DoD Phase 5:** ✅ Nộp đơn → nhận email trong Mailpit < 5s. Giám khảo bấm "Gợi ý câu hỏi" → 3–5 câu hỏi liên quan đúng skill gap.
+
+> Ghi chú còn mở: dùng **Mailpit** thay MailHog theo hạ tầng hiện tại; template viết bằng HTML thuần (không dùng MJML/Handlebars) để giảm dependency. Nếu cần template engine đầy đủ thì có thể bổ sung ở Phase 7.
 
 ---
 

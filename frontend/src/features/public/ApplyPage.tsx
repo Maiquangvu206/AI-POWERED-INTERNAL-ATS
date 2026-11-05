@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ErrorAlert, Loading, StatusBadge } from '../../components/ui';
-import { api } from '../../lib/api';
+import { api, getAccessToken, setAccessToken } from '../../lib/api';
 
 interface PublicCampaign {
   id: number;
@@ -39,6 +39,7 @@ export function ApplyPage() {
   const [state, setState] = useState<'idle' | 'submitting' | 'error'>('idle');
   const [error, setError] = useState('');
   const [result, setResult] = useState<ApplyResponse | null>(null);
+  const [staffSession, setStaffSession] = useState(() => Boolean(getAccessToken()));
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -123,6 +124,41 @@ export function ApplyPage() {
               <i className="bi bi-arrow-left me-1" aria-hidden="true" />
               Về trang chủ
             </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (staffSession) {
+    return (
+      <main className="container-xl py-5">
+        <div className="card border-0 shadow-sm rounded-4 mx-auto" style={{ maxWidth: 560 }}>
+          <div className="card-body text-center p-5">
+            <span className="metric-icon bg-warning-subtle text-warning mx-auto mb-3">
+              <i className="bi bi-shield-exclamation" aria-hidden="true" />
+            </span>
+            <h1 className="h4 fw-bold">Bạn đang đăng nhập nội bộ</h1>
+            <p className="text-body-secondary">
+              Tài khoản quản trị/giám khảo không thể nộp hồ sơ ứng viên. Hãy đăng xuất để nộp hồ sơ
+              với tư cách ứng viên.
+            </p>
+            <div className="d-flex justify-content-center gap-2 flex-wrap">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setAccessToken(null);
+                  setStaffSession(false);
+                }}
+              >
+                <i className="bi bi-box-arrow-right me-1" aria-hidden="true" />
+                Đăng xuất &amp; ứng tuyển
+              </button>
+              <Link to="/" className="btn btn-outline-secondary">
+                Về trang chủ
+              </Link>
+            </div>
           </div>
         </div>
       </main>

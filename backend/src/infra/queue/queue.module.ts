@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
-import { CV_PROCESSING_DLQ, CV_PROCESSING_QUEUE } from './queue.constants';
+import { CV_PROCESSING_DLQ, CV_PROCESSING_QUEUE, EMAIL_DLQ, EMAIL_QUEUE } from './queue.constants';
 import { QueueService } from './queue.service';
 import { CvProcessingProcessor } from './cv-processing.processor';
 
@@ -55,6 +55,23 @@ export function buildRedisConnection(redisUrl: string): RedisConnection {
       name: CV_PROCESSING_DLQ,
       defaultJobOptions: {
         // Không bao giờ tự xoá: job chết là bằng chứng cần điều tra
+        removeOnComplete: false,
+        removeOnFail: false,
+      },
+    }),
+    BullModule.registerQueue({
+      name: EMAIL_QUEUE,
+      defaultJobOptions: {
+        attempts: 3,
+        // 10s, 20s, 40s… đủ thời gian Mailpit/SMTP tỉnh dậy mà không spam ứng viên
+        backoff: { type: 'exponential', delay: 10_000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    }),
+    BullModule.registerQueue({
+      name: EMAIL_DLQ,
+      defaultJobOptions: {
         removeOnComplete: false,
         removeOnFail: false,
       },

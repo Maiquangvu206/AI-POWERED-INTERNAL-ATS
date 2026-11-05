@@ -9,6 +9,7 @@ import { Prisma, Role, RoundStatus } from '@prisma/client';
 import type { ClientMeta } from '../../common/decorators/client-meta.decorator';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { MailService } from '../mail/mail.service';
 import { CreateEvaluationDto, EvaluationScoreDto, UpdateEvaluationDto } from './dto/evaluation.dto';
 
 /** Ngưỡng cảnh báo lệch điểm giữa các giám khảo (thang 0–100). */
@@ -21,6 +22,7 @@ export class EvaluationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly mail: MailService,
   ) {}
 
   /** Ứng viên đang ở vòng — kèm phiếu của chính giám khảo đang đăng nhập. */
@@ -250,6 +252,10 @@ export class EvaluationsService {
         campaignId: true,
         currentRoundId: true,
         currentRound: { select: { roundName: true } },
+        fullName: true,
+        email: true,
+        trackingCode: true,
+        campaign: { select: { title: true } },
       },
     });
 
@@ -278,6 +284,20 @@ export class EvaluationsService {
       ip: meta?.ip,
       userAgent: meta?.userAgent,
     });
+
+    // Chỉ gửi khi thực sự chuyển từ vòng cũ sang vòng mới (không gửi lúc gán lần đầu).
+    if (candidate.currentRoundId && candidate.currentRoundId !== roundId) {
+      await this.mail.sendRoundResult({
+        candidateId: candidate.id,
+        to: candidate.email,
+        fullName: candidate.fullName,
+        campaignTitle: candidate.campaign.title,
+        roundName: candidate.currentRound?.roundName ?? `#${candidate.currentRoundId}`,
+        roundId: candidate.currentRoundId,
+        nextRoundName: round.roundName,
+        trackingCode: candidate.trackingCode,
+      });
+    }
 
     return updated;
   }

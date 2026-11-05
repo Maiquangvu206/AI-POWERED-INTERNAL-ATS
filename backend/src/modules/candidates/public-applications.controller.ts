@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
@@ -6,6 +15,11 @@ import { memoryStorage } from 'multer';
 import { CV_UPLOAD_LIMITS } from '@ats/shared';
 import { Public } from '../../common/decorators/public.decorator';
 import { ClientMeta } from '../../common/decorators/client-meta.decorator';
+import {
+  CurrentUser,
+  type AuthenticatedUser,
+} from '../../common/decorators/current-user.decorator';
+import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { CandidatesService } from './candidates.service';
 
 @ApiTags('public/applications')
@@ -14,6 +28,7 @@ export class PublicApplicationsController {
   constructor(private readonly candidates: CandidatesService) {}
 
   @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Post('campaigns/:slug/apply')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @UseInterceptors(
@@ -45,8 +60,9 @@ export class PublicApplicationsController {
     @Body() body: Record<string, string>,
     @UploadedFile() file: Express.Multer.File | undefined,
     @ClientMeta() meta: ClientMeta,
+    @CurrentUser() actor: AuthenticatedUser | undefined,
   ) {
-    return this.candidates.apply(slug, body, file, meta);
+    return this.candidates.apply(slug, body, file, meta, actor);
   }
 
   @Public()

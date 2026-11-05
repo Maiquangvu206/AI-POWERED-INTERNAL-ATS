@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { getAccessToken, setAccessToken } from '../lib/api';
+import { getAccessToken, setAccessToken, AUTH_CHANGED_EVENT } from '../lib/api';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }): string =>
   `nav-link px-2${isActive ? ' active fw-semibold' : ''}`;
@@ -15,6 +15,12 @@ export function AppLayout(): React.JSX.Element {
     setAuthed(Boolean(getAccessToken()));
     setMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const sync = (): void => setAuthed(Boolean(getAccessToken()));
+    window.addEventListener(AUTH_CHANGED_EVENT, sync);
+    return () => window.removeEventListener(AUTH_CHANGED_EVENT, sync);
+  }, []);
 
   const logout = (): void => {
     setAccessToken(null);

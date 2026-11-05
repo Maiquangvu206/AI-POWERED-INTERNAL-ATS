@@ -28,6 +28,7 @@ export function AdminCampaignPage() {
   const [data, setData] = useState<RankingResponse | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,6 +49,37 @@ export function AdminCampaignPage() {
   }, [campaignId]);
 
   const maxBucket = Math.max(1, ...(data?.distribution.map((bucket) => bucket.count) ?? [1]));
+
+  const setFinalStatus = async (
+    candidate: RankingCandidate,
+    finalStatus: 'PASSED' | 'REJECTED',
+  ): Promise<void> => {
+    const action = finalStatus === 'PASSED' ? 'ĐẠT' : 'TỪ CHỐI';
+    if (!window.confirm(`Chốt kết quả ${action} cho ${candidate.fullName} và gửi email?`)) return;
+
+    setBusyId(candidate.id);
+    setError('');
+    try {
+      await api(`/admin/candidates/${candidate.id}/final-status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ finalStatus }),
+      });
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) =>
+                item.id === candidate.id ? { ...item, finalStatus } : item,
+              ),
+            }
+          : current,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không cập nhật được kết quả');
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <main className="container-xl py-4 py-lg-5">
@@ -168,6 +200,7 @@ export function AdminCampaignPage() {
                           <th scope="col">Kỹ năng</th>
                           <th scope="col">Vòng</th>
                           <th scope="col">Trạng thái</th>
+                          <th scope="col">Kết quả</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -214,11 +247,35 @@ export function AdminCampaignPage() {
                             <td>
                               <StatusBadge status={candidate.finalStatus} />
                             </td>
+                            <td className="text-nowrap">
+                              <div className="btn-group btn-group-sm" role="group">
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-success"
+                                  onClick={() => void setFinalStatus(candidate, 'PASSED')}
+                                  disabled={busyId === candidate.id}
+                                  title="Chốt ĐẠT và gửi email"
+                                >
+                                  <i className="bi bi-check2" aria-hidden="true" />
+                                  <span className="visually-hidden">Đạt</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-danger"
+                                  onClick={() => void setFinalStatus(candidate, 'REJECTED')}
+                                  disabled={busyId === candidate.id}
+                                  title="Chốt TỪ CHỐI và gửi email"
+                                >
+                                  <i className="bi bi-x" aria-hidden="true" />
+                                  <span className="visually-hidden">Từ chối</span>
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                         {data.items.length === 0 && (
                           <tr>
-                            <td colSpan={6} className="text-center text-body-secondary py-5">
+                            <td colSpan={7} className="text-center text-body-secondary py-5">
                               Chưa có hồ sơ nào.
                             </td>
                           </tr>

@@ -1,6 +1,8 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
 const TOKEN_KEY = 'ats.access_token';
 
+export const AUTH_CHANGED_EVENT = 'ats:auth-changed';
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -17,6 +19,7 @@ export function getAccessToken(): string | null {
 export function setAccessToken(token: string | null): void {
   if (token) localStorage.setItem(TOKEN_KEY, token);
   else localStorage.removeItem(TOKEN_KEY);
+  window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {

@@ -45,9 +45,16 @@ export interface RoundCandidatesResponse {
   candidates: RoundCandidate[];
 }
 
+export interface CopilotSuggestion {
+  question: string;
+  rationale: string;
+  expectedSignals: string[];
+}
+
 export interface CopilotResponse {
-  questions: string[];
+  suggestions: CopilotSuggestion[];
   llmUsed: boolean;
   fallbackUsed: boolean;
+  cached: boolean;
   missingSkills: string[];
 }

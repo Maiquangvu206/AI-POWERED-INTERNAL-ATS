@@ -22,9 +22,14 @@ RUN apt-get update \
 WORKDIR /srv/ai
 
 COPY pyproject.toml ./
-COPY app ./app
 
-RUN pip install -e ".[ai]"
+# Cài dependency (torch/CUDA rất nặng) vào layer riêng, trước khi copy code.
+# Nhờ vậy sửa app/ không phải tải lại toàn bộ model runtime mỗi lần build.
+RUN mkdir -p app && touch app/__init__.py \
+  && pip install -e ".[ai]" \
+  && rm -rf app
+
+COPY app ./app
 
 EXPOSE 8010
 

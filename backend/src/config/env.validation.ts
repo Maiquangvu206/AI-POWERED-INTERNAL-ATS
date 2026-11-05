@@ -53,6 +53,14 @@ export const envSchema = z.object({
   // --- Chống spam public (Phase 4) --------------------------------------------
   /** Để trống = tắt CAPTCHA (dev/test); đặt secret Cloudflare Turnstile ở production. */
   TURNSTILE_SECRET_KEY: z.string().default(''),
+
+  // --- Email / SMTP (Phase 5) ------------------------------------------------
+  SMTP_HOST: z.string().min(1).default('localhost'),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65_535).default(1025),
+  SMTP_SECURE: envBoolean(false),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASS: z.string().default(''),
+  MAIL_FROM: z.string().default('AI-Powered ATS <no-reply@ats.local>'),
 });
 
 export type Env = z.infer<typeof envSchema>;
